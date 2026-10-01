@@ -135,7 +135,7 @@ void FrameDelivery::Run() noexcept {
                 waitMs = kAllocatorEmptyRetryMs;
             } else {
                 if (FAILED(hr) && !reportedDeliveryFailure_) {
-                    trace::Writef(trace::Level::Warning, L"Sample delivery failed: 0x{:08X}", static_cast<std::uint32_t>(hr));
+                    um::trace::Writef(um::trace::Level::Warning, L"Sample delivery failed: 0x{:08X}", static_cast<std::uint32_t>(hr));
                     reportedDeliveryFailure_ = true;
                 }
                 continue;  // re-evaluate immediately: another request may already be due

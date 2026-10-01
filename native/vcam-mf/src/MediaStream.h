@@ -32,7 +32,7 @@ public:
     STDMETHODIMP BeginGetEvent(IMFAsyncCallback* callback, IUnknown* state) override;
     STDMETHODIMP EndGetEvent(IMFAsyncResult* result, IMFMediaEvent** event) override;
     STDMETHODIMP GetEvent(DWORD flags, IMFMediaEvent** event) override;
-    STDMETHODIMP QueueEvent(MediaEventType type, REFGUID extendedType, HRESULT status, const PROPVARIANT* value) override;
+    STDMETHODIMP QueueEvent(MediaEventType type, REFGUID extendedType, HRESULT status, const PROPVARIANT* eventValue) override;
 
     // IMFMediaStream
     STDMETHODIMP GetMediaSource(IMFMediaSource** source) override;

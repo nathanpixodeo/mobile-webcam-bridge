@@ -83,10 +83,10 @@ STDMETHODIMP MediaStream::GetEvent(DWORD flags, IMFMediaEvent** event) {
     return queue->GetEvent(flags, event);
 }
 
-STDMETHODIMP MediaStream::QueueEvent(MediaEventType type, REFGUID extendedType, HRESULT status, const PROPVARIANT* value) {
+STDMETHODIMP MediaStream::QueueEvent(MediaEventType type, REFGUID extendedType, HRESULT status, const PROPVARIANT* eventValue) {
     auto lock = lock_.lock_exclusive();
     RETURN_IF_FAILED_EXPECTED(CheckShutdownRequiresLock());
-    return eventQueue_->QueueEventParamVar(type, extendedType, status, value);
+    return eventQueue_->QueueEventParamVar(type, extendedType, status, eventValue);
 }
 
 // ---- IMFMediaStream ----
@@ -234,7 +234,7 @@ HRESULT MediaStream::StartRequiresLock(IMFMediaType* newMediaType, bool sendEven
         });
         RETURN_IF_FAILED(delivery->Start());
         delivery_ = std::move(delivery);
-        trace::Writef(trace::Level::Info, L"Stream started: {}x{}@{} {}", settings_.mode.width, settings_.mode.height,
+        um::trace::Writef(um::trace::Level::Info, L"Stream started: {}x{}@{} {}", settings_.mode.width, settings_.mode.height,
                       settings_.mode.fpsNum, format_ == OutputFormat::Nv12 ? L"NV12" : L"YUY2");
     }
     delivery_->SetPaused(false);
@@ -250,7 +250,7 @@ void MediaStream::StopRequiresLock() noexcept {
     if (delivery_) {
         delivery_->Stop();  // joins the delivery thread; it never takes lock_
         delivery_.reset();
-        trace::Write(trace::Level::Info, L"Stream stopped");
+        um::trace::Write(um::trace::Level::Info, L"Stream stopped");
     }
     if (allocator_ && allocatorInitialized_) {
         LOG_IF_FAILED(allocator_->UninitializeSampleAllocator());

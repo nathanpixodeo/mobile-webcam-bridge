@@ -30,7 +30,7 @@ HRESULT MediaSource::RuntimeClassInitialize(IMFAttributes* activateAttributes) n
 
     const HRESULT settingsResult = um::LoadCameraSettings(settings_);
     if (FAILED(settingsResult)) {
-        trace::Writef(trace::Level::Warning, L"Camera settings unavailable (0x{:08X}), using defaults",
+        um::trace::Writef(um::trace::Level::Warning, L"Camera settings unavailable (0x{:08X}), using defaults",
                       static_cast<std::uint32_t>(settingsResult));
     }
 
@@ -149,7 +149,7 @@ STDMETHODIMP MediaSource::Shutdown() {
     eventQueue_.reset();
     presentationDescriptor_.reset();
     attributes_.reset();
-    trace::Write(trace::Level::Info, L"Source shut down");
+    um::trace::Write(um::trace::Level::Info, L"Source shut down");
     return S_OK;
 }
 

@@ -24,7 +24,7 @@ STDMETHODIMP Activator::ActivateObject(REFIID riid, void** object) {
         // attributes (Frame Server's client context included) at creation.
         source_.reset();
         RETURN_IF_FAILED(Microsoft::WRL::MakeAndInitialize<MediaSource>(source_.put(), store_.get()));
-        trace::Write(trace::Level::Info, L"Media source created");
+        um::trace::Write(um::trace::Level::Info, L"Media source created");
     }
     return source_->QueryInterface(riid, object);
 }

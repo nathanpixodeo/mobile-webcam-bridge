@@ -6,11 +6,12 @@ import XCTest
 enum TestVectors {
     static var directory: URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Support
-            .deletingLastPathComponent() // BridgeKitTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // BridgeKit
-            .deletingLastPathComponent() // ios
+            .deletingLastPathComponent() // -> Support
+            .deletingLastPathComponent() // -> BridgeKitTests
+            .deletingLastPathComponent() // -> Tests
+            .deletingLastPathComponent() // -> BridgeKit
+            .deletingLastPathComponent() // -> ios
+            .deletingLastPathComponent() // -> repository root
             .appendingPathComponent("protocol")
             .appendingPathComponent("test-vectors")
     }
