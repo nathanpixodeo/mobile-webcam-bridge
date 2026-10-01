@@ -1,3 +1,6 @@
+# Android companion app: protocol module tests, app unit tests and a debug APK (artifact
+# mobile-webcam-apk, install with `adb install -r app-debug.apk`). Runs on changes to android/ or
+# protocol/, or manually.
 name: android
 
 on:

@@ -1,3 +1,5 @@
+# Node host: typecheck, lint, formatting, unit and integration tests (integration tests use a
+# real ffmpeg and a fake phone over TCP). Runs on changes to host/ or protocol/, or manually.
 name: host
 
 on:
@@ -11,9 +13,13 @@ concurrency:
   group: host-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: windows-2025
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: host

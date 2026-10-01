@@ -1,3 +1,5 @@
+# iOS companion app: BridgeKit tests on Linux, then an unsigned IPA on macOS (artifact
+# mobile-webcam-ipa, install with Sideloadly). Runs on changes to ios/ or protocol/, or manually.
 name: ios
 
 on:
