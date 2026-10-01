@@ -176,7 +176,7 @@ public:
         if (!endpoints.empty()) {
             return Warn("Capture endpoint \"" + ToUtf8(endpoints.front().friendlyName) + "\" is disabled in Sound settings");
         }
-        return context.mic.installed ? Fail("The driver is installed but Windows shows no "Mobile Webcam Microphone" capture endpoint")
+        return context.mic.installed ? Fail("The driver is installed but Windows shows no 'Mobile Webcam Microphone' capture endpoint")
                                      : Pass("Not installed");
     }
 };
