@@ -1,0 +1,476 @@
+{
+  "version": 1,
+  "headerSize": 24,
+  "valid": [
+    {
+      "name": "ping",
+      "hex": "4d57425203000000000000000000000000000000000f4240",
+      "header": {
+        "type": 3,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 0,
+        "timestampUs": "1000000"
+      },
+      "payload": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "pong",
+      "hex": "4d57425204000000000000000000001000000000001e873c00000000000f424000000000001e8674",
+      "header": {
+        "type": 4,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 16,
+        "timestampUs": "2000700"
+      },
+      "payload": {
+        "kind": "pong",
+        "echoT0": "1000000",
+        "t1": "2000500"
+      }
+    },
+    {
+      "name": "hello-host",
+      "hex": "4d5742520100000000000000000000c300000000000000007b22617070223a7b226275696c64223a22646576222c22676974536861223a2230303030303030222c226e616d65223a226d6f62696c652d77656263616d2d6272696467652d686f7374222c2276657273696f6e223a22302e312e30227d2c226665617475726573223a5b22617564696f2e70636d222c226c6f67222c22737461747573222c22766964656f2e68323634225d2c2270726f746f636f6c223a7b226d616a6f72223a312c226d696e6f72223a307d2c22726f6c65223a22686f7374227d",
+      "header": {
+        "type": 1,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 195,
+        "timestampUs": "0"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"app\":{\"build\":\"dev\",\"gitSha\":\"0000000\",\"name\":\"mobile-webcam-bridge-host\",\"version\":\"0.1.0\"},\"features\":[\"audio.pcm\",\"log\",\"status\",\"video.h264\"],\"protocol\":{\"major\":1,\"minor\":0},\"role\":\"host\"}",
+        "value": {
+          "protocol": {
+            "major": 1,
+            "minor": 0
+          },
+          "role": "host",
+          "app": {
+            "name": "mobile-webcam-bridge-host",
+            "version": "0.1.0",
+            "build": "dev",
+            "gitSha": "0000000"
+          },
+          "features": [
+            "audio.pcm",
+            "log",
+            "status",
+            "video.h264"
+          ]
+        }
+      }
+    },
+    {
+      "name": "hello-device",
+      "hex": "4d574252010000000000000000000103000000000000002a7b22617070223a7b226275696c64223a223432222c22676974536861223a2230313233616263222c226e616d65223a226d6f62696c652d77656263616d2d6272696467652d696f73222c2276657273696f6e223a22302e312e30227d2c22646576696365223a7b226d6f64656c223a226950686f6e6531362c31222c226e616d65223a226950686f6e65222c226f73223a22694f532032362e30227d2c226665617475726573223a5b22617564696f2e70636d222c226c6f67222c22737461747573222c22766964656f2e68323634225d2c2270726f746f636f6c223a7b226d616a6f72223a312c226d696e6f72223a307d2c22726f6c65223a22646576696365227d",
+      "header": {
+        "type": 1,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 259,
+        "timestampUs": "42"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"app\":{\"build\":\"42\",\"gitSha\":\"0123abc\",\"name\":\"mobile-webcam-bridge-ios\",\"version\":\"0.1.0\"},\"device\":{\"model\":\"iPhone16,1\",\"name\":\"iPhone\",\"os\":\"iOS 26.0\"},\"features\":[\"audio.pcm\",\"log\",\"status\",\"video.h264\"],\"protocol\":{\"major\":1,\"minor\":0},\"role\":\"device\"}",
+        "value": {
+          "protocol": {
+            "major": 1,
+            "minor": 0
+          },
+          "role": "device",
+          "app": {
+            "name": "mobile-webcam-bridge-ios",
+            "version": "0.1.0",
+            "build": "42",
+            "gitSha": "0123abc"
+          },
+          "device": {
+            "model": "iPhone16,1",
+            "name": "iPhone",
+            "os": "iOS 26.0"
+          },
+          "features": [
+            "audio.pcm",
+            "log",
+            "status",
+            "video.h264"
+          ]
+        }
+      }
+    },
+    {
+      "name": "hello-device-android",
+      "hex": "4d574252010000000000000000000104000000000000002b7b22617070223a7b226275696c64223a2237222c22676974536861223a2230313233616263222c226e616d65223a226d6f62696c652d77656263616d2d6272696467652d616e64726f6964222c2276657273696f6e223a22302e312e30227d2c22646576696365223a7b226d6f64656c223a22506978656c2039222c226e616d65223a22506978656c222c226f73223a22416e64726f6964203136227d2c226665617475726573223a5b22617564696f2e70636d222c226c6f67222c22737461747573222c22766964656f2e68323634225d2c2270726f746f636f6c223a7b226d616a6f72223a312c226d696e6f72223a307d2c22726f6c65223a22646576696365227d",
+      "header": {
+        "type": 1,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 260,
+        "timestampUs": "43"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"app\":{\"build\":\"7\",\"gitSha\":\"0123abc\",\"name\":\"mobile-webcam-bridge-android\",\"version\":\"0.1.0\"},\"device\":{\"model\":\"Pixel 9\",\"name\":\"Pixel\",\"os\":\"Android 16\"},\"features\":[\"audio.pcm\",\"log\",\"status\",\"video.h264\"],\"protocol\":{\"major\":1,\"minor\":0},\"role\":\"device\"}",
+        "value": {
+          "protocol": {
+            "major": 1,
+            "minor": 0
+          },
+          "role": "device",
+          "app": {
+            "name": "mobile-webcam-bridge-android",
+            "version": "0.1.0",
+            "build": "7",
+            "gitSha": "0123abc"
+          },
+          "device": {
+            "model": "Pixel 9",
+            "name": "Pixel",
+            "os": "Android 16"
+          },
+          "features": [
+            "audio.pcm",
+            "log",
+            "status",
+            "video.h264"
+          ]
+        }
+      }
+    },
+    {
+      "name": "start-video",
+      "hex": "4d57425210000000000000010000008700000000000013887b22626974726174654b627073223a363030302c2263616d657261223a226261636b2e77696465222c22656e636f646572223a226c6f774c6174656e6379222c22667073223a33302c22686569676874223a3732302c226d6972726f72223a66616c73652c226f7269656e746174696f6e223a226175746f222c227769647468223a313238307d",
+      "header": {
+        "type": 16,
+        "flags": 0,
+        "seq": 1,
+        "payloadLength": 135,
+        "timestampUs": "5000"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"bitrateKbps\":6000,\"camera\":\"back.wide\",\"encoder\":\"lowLatency\",\"fps\":30,\"height\":720,\"mirror\":false,\"orientation\":\"auto\",\"width\":1280}",
+        "value": {
+          "width": 1280,
+          "height": 720,
+          "fps": 30,
+          "bitrateKbps": 6000,
+          "camera": "back.wide",
+          "mirror": false,
+          "orientation": "auto",
+          "encoder": "lowLatency"
+        }
+      }
+    },
+    {
+      "name": "start-audio",
+      "hex": "4d57425213000000000000000000001900000000000013897b2270726f63657373696e67223a227374616e64617264227d",
+      "header": {
+        "type": 19,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 25,
+        "timestampUs": "5001"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"processing\":\"standard\"}",
+        "value": {
+          "processing": "standard"
+        }
+      }
+    },
+    {
+      "name": "stop-video-max-seq",
+      "hex": "4d57425211000000ffffffff000000000000000000000007",
+      "header": {
+        "type": 17,
+        "flags": 0,
+        "seq": 4294967295,
+        "payloadLength": 0,
+        "timestampUs": "7"
+      },
+      "payload": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "request-keyframe",
+      "hex": "4d5742521200000000000003000000000000000000000000",
+      "header": {
+        "type": 18,
+        "flags": 0,
+        "seq": 3,
+        "payloadLength": 0,
+        "timestampUs": "0"
+      },
+      "payload": {
+        "kind": "none"
+      }
+    },
+    {
+      "name": "video-config",
+      "hex": "4d5742522000000000000000000000bc00000000000023287b22626974726174654b627073223a363030302c2263616d657261223a226261636b2e77696465222c22636f646563223a2268323634222c22636f6e6669674964223a312c22656e636f646572223a226c6f774c6174656e6379222c22667073223a33302c22686569676874223a3732302c226d6972726f726564223a66616c73652c2270726f66696c65223a22636f6e73747261696e656448696768222c22726f746174696f6e446567223a302c227769647468223a313238307d",
+      "header": {
+        "type": 32,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 188,
+        "timestampUs": "9000"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"bitrateKbps\":6000,\"camera\":\"back.wide\",\"codec\":\"h264\",\"configId\":1,\"encoder\":\"lowLatency\",\"fps\":30,\"height\":720,\"mirrored\":false,\"profile\":\"constrainedHigh\",\"rotationDeg\":0,\"width\":1280}",
+        "value": {
+          "configId": 1,
+          "codec": "h264",
+          "profile": "constrainedHigh",
+          "width": 1280,
+          "height": 720,
+          "fps": 30,
+          "bitrateKbps": 6000,
+          "rotationDeg": 0,
+          "mirrored": false,
+          "encoder": "lowLatency",
+          "camera": "back.wide"
+        }
+      }
+    },
+    {
+      "name": "video-access-unit-idr",
+      "hex": "4d57425221030000000000050000001d0000000000008235000000016742c01f8c8d400000000168ce3c80000000016588840033ff",
+      "header": {
+        "type": 33,
+        "flags": 3,
+        "seq": 5,
+        "payloadLength": 29,
+        "timestampUs": "33333"
+      },
+      "payload": {
+        "kind": "hex",
+        "hex": "000000016742c01f8c8d400000000168ce3c80000000016588840033ff"
+      }
+    },
+    {
+      "name": "audio-config",
+      "hex": "4d57425230000000000000000000003f00000000000000007b226368616e6e656c73223a312c22636f6e6669674964223a312c22666f726d6174223a227331366c65222c2273616d706c6552617465223a34383030307d",
+      "header": {
+        "type": 48,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 63,
+        "timestampUs": "0"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"channels\":1,\"configId\":1,\"format\":\"s16le\",\"sampleRate\":48000}",
+        "value": {
+          "configId": 1,
+          "format": "s16le",
+          "sampleRate": 48000,
+          "channels": 1
+        }
+      }
+    },
+    {
+      "name": "audio-chunk-discontinuity",
+      "hex": "4d57425231010000000000090000000a00000000075bcd1500000100ffffff7f0080",
+      "header": {
+        "type": 49,
+        "flags": 1,
+        "seq": 9,
+        "payloadLength": 10,
+        "timestampUs": "123456789"
+      },
+      "payload": {
+        "kind": "hex",
+        "hex": "00000100ffffff7f0080"
+      }
+    },
+    {
+      "name": "status",
+      "hex": "4d57425240000000000000020000011600000000009896807b226170705374617465223a22616374697665222c22617564696f223a7b227374617465223a2272756e6e696e67227d2c2262617474657279223a7b226368617267696e67223a747275652c226c6576656c50657263656e74223a38317d2c226c6f77506f776572223a66616c73652c227065726d697373696f6e73223a7b2263616d657261223a22617574686f72697a6564222c226d6963726f70686f6e65223a22617574686f72697a6564227d2c22746865726d616c223a226e6f6d696e616c222c22766964656f223a7b22626974726174654b627073223a363030302c22667073223a33302c22686569676874223a3732302c227374617465223a2272756e6e696e67222c227769647468223a313238307d7d",
+      "header": {
+        "type": 64,
+        "flags": 0,
+        "seq": 2,
+        "payloadLength": 278,
+        "timestampUs": "10000000"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"appState\":\"active\",\"audio\":{\"state\":\"running\"},\"battery\":{\"charging\":true,\"levelPercent\":81},\"lowPower\":false,\"permissions\":{\"camera\":\"authorized\",\"microphone\":\"authorized\"},\"thermal\":\"nominal\",\"video\":{\"bitrateKbps\":6000,\"fps\":30,\"height\":720,\"state\":\"running\",\"width\":1280}}",
+        "value": {
+          "appState": "active",
+          "audio": {
+            "state": "running"
+          },
+          "battery": {
+            "levelPercent": 81,
+            "charging": true
+          },
+          "lowPower": false,
+          "permissions": {
+            "camera": "authorized",
+            "microphone": "authorized"
+          },
+          "thermal": "nominal",
+          "video": {
+            "state": "running",
+            "width": 1280,
+            "height": 720,
+            "fps": 30,
+            "bitrateKbps": 6000
+          }
+        }
+      }
+    },
+    {
+      "name": "log",
+      "hex": "4d574252410000000000000b0000004100000000009896817b2263617465676f7279223a2263617074757265222c226c6576656c223a22696e666f222c226d657373616765223a2253657373696f6e2073746172746564227d",
+      "header": {
+        "type": 65,
+        "flags": 0,
+        "seq": 11,
+        "payloadLength": 65,
+        "timestampUs": "10000001"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"category\":\"capture\",\"level\":\"info\",\"message\":\"Session started\"}",
+        "value": {
+          "level": "info",
+          "category": "capture",
+          "message": "Session started"
+        }
+      }
+    },
+    {
+      "name": "error",
+      "hex": "4d57425202000000000000000000005900000000000000007b22636f6465223a2256455253494f4e5f4d49534d41544348222c22666174616c223a747275652c226d657373616765223a22556e737570706f727465642070726f746f636f6c206d616a6f722076657273696f6e2032227d",
+      "header": {
+        "type": 2,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 89,
+        "timestampUs": "0"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"code\":\"VERSION_MISMATCH\",\"fatal\":true,\"message\":\"Unsupported protocol major version 2\"}",
+        "value": {
+          "code": "VERSION_MISMATCH",
+          "message": "Unsupported protocol major version 2",
+          "fatal": true
+        }
+      }
+    },
+    {
+      "name": "negative-timestamp",
+      "hex": "4d574252030000000000000000000000fffffffffffffffb",
+      "header": {
+        "type": 3,
+        "flags": 0,
+        "seq": 0,
+        "payloadLength": 0,
+        "timestampUs": "-5"
+      },
+      "payload": {
+        "kind": "none"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "bad-magic",
+      "hex": "4d5742530300000000000000000000000000000000000000",
+      "error": "BAD_MAGIC"
+    },
+    {
+      "name": "audio-too-large",
+      "hex": "4d5742523100000000000000000100010000000000000000",
+      "error": "PAYLOAD_TOO_LARGE"
+    },
+    {
+      "name": "video-too-large",
+      "hex": "4d5742522100000000000000004000010000000000000000",
+      "error": "PAYLOAD_TOO_LARGE"
+    },
+    {
+      "name": "json-too-large",
+      "hex": "4d5742520100000000000000000100010000000000000000",
+      "error": "PAYLOAD_TOO_LARGE"
+    },
+    {
+      "name": "log-too-large",
+      "hex": "4d5742524100000000000000000020010000000000000000",
+      "error": "PAYLOAD_TOO_LARGE"
+    },
+    {
+      "name": "unknown-type-too-large",
+      "hex": "4d5742527f00000000000000004000010000000000000000",
+      "error": "PAYLOAD_TOO_LARGE"
+    },
+    {
+      "name": "ping-with-payload",
+      "hex": "4d57425203000000000000000000000200000000000000000000",
+      "error": "BAD_PAYLOAD_LENGTH"
+    },
+    {
+      "name": "pong-wrong-length",
+      "hex": "4d57425204000000000000000000000800000000000000000000000000000000",
+      "error": "BAD_PAYLOAD_LENGTH"
+    }
+  ],
+  "streams": [
+    {
+      "name": "three-packets",
+      "hex": "4d57425203000000000000000000000000000000000f42404d57425231010000000000090000000a00000000075bcd1500000100ffffff7f00804d57425221030000000000050000001d0000000000008235000000016742c01f8c8d400000000168ce3c80000000016588840033ff",
+      "expect": [
+        {
+          "type": 3,
+          "flags": 0,
+          "seq": 0,
+          "payloadHex": ""
+        },
+        {
+          "type": 49,
+          "flags": 1,
+          "seq": 9,
+          "payloadHex": "00000100ffffff7f0080"
+        },
+        {
+          "type": 33,
+          "flags": 3,
+          "seq": 5,
+          "payloadHex": "000000016742c01f8c8d400000000168ce3c80000000016588840033ff"
+        }
+      ]
+    },
+    {
+      "name": "unknown-type-is-delivered-raw",
+      "hex": "4d5742527f000000000000040000000300000000000000010102034d57425203000000000000000000000000000000000f4240",
+      "expect": [
+        {
+          "type": 127,
+          "flags": 0,
+          "seq": 4,
+          "payloadHex": "010203"
+        },
+        {
+          "type": 3,
+          "flags": 0,
+          "seq": 0,
+          "payloadHex": ""
+        }
+      ]
+    }
+  ]
+}

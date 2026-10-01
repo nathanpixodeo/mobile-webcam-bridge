@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shared settings for every user-mode project. Import it in the PropertySheets ImportGroup,
+  i.e. after Microsoft.Cpp.props:
+
+    <Import Project="..\build\UserMode.props" />
+
+  Projects add their own defines, include directories and libraries on top of these.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <SDLCheck>true</SDLCheck>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <!-- /Qspectre only affects code generation; it does not require the Spectre-mitigated CRT. -->
+      <AdditionalOptions>/utf-8 /Qspectre /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
+      <!-- _WIN32_WINNT=0x0A00 alone pins NTDDI_VERSION to Windows 10 1507 and hides newer
+           declarations such as MFCreateVirtualCamera. NTDDI_WIN10_CO (Windows 11 21H2) exposes
+           them; Windows 11-only functions are still resolved at run time where it matters. -->
+      <PreprocessorDefinitions>UNICODE;_UNICODE;_WIN32_WINNT=0x0A00;WINVER=0x0A00;NTDDI_VERSION=0x0A00000B;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MwbNativeRoot)common\include;$(MwbNativeRoot)third_party\wil\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <CETCompat Condition="'$(Platform)' == 'x64'">true</CETCompat>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- Static CRT everywhere: the camera DLLs load into Frame Server and third-party apps,
+       which must not depend on a VC++ redistributable being installed. -->
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Release'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

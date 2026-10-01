@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared user-mode helpers for the camera consumers (vcam-mf, vcam-dshow): frame pipe client,
+     colour conversion, registry settings, placeholder frames, tracing. -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{AB860889-3A50-4C75-BE0E-C88E32464327}</ProjectGuid>
+    <RootNamespace>common_um</RootNamespace>
+    <ProjectName>common-um</ProjectName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\UserMode.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <!-- Consumers of this library add the same include paths. -->
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)include;$(MSBuildThisFileDirectory)..\common\include;$(MSBuildThisFileDirectory)..\third_party\wil\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="include\mwb\um\CameraConfig.h" />
+    <ClInclude Include="include\mwb\um\ColorConvert.h" />
+    <ClInclude Include="include\mwb\um\Guid.h" />
+    <ClInclude Include="include\mwb\um\PipeFrameReceiver.h" />
+    <ClInclude Include="include\mwb\um\Placeholder.h" />
+    <ClInclude Include="include\mwb\um\Tracing.h" />
+    <ClInclude Include="..\common\include\mwb\FrameProtocol.h" />
+    <ClInclude Include="..\common\include\mwb\Identifiers.h" />
+    <ClInclude Include="..\common\include\mwb\TripleBuffer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\CameraConfig.cpp" />
+    <ClCompile Include="src\ColorConvert.cpp" />
+    <ClCompile Include="src\PipeFrameReceiver.cpp" />
+    <ClCompile Include="src\Placeholder.cpp" />
+    <ClCompile Include="src\Tracing.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Imported automatically by every MSBuild project under native/ (virtual-mic has its own
+  Directory.Build.props and does not inherit this file). It is evaluated before
+  Microsoft.Cpp.Default.props, so it only holds properties that are safe to set that early.
+  Compiler and linker settings for user-mode projects live in build/UserMode.props.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MwbNativeRoot>$(MSBuildThisFileDirectory)</MwbNativeRoot>
+    <PlatformToolset Condition="'$(PlatformToolset)' == ''">v143</PlatformToolset>
+    <!-- 10.0 = newest installed Windows 10/11 SDK (needs 10.0.22000+ for mfvirtualcamera.h). -->
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">10.0</WindowsTargetPlatformVersion>
+    <OutDir>$(MwbNativeRoot)out\$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(MwbNativeRoot)out\obj\$(Configuration)\$(Platform)\$(MSBuildProjectName)\</IntDir>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,35 @@
+{
+  "device": {
+    "port": 27100
+  },
+  "usbmux": {
+    "enabled": true
+  },
+  "adb": {
+    "enabled": true,
+    "startServer": true
+  },
+  "video": {
+    "bitrateKbps": 6000,
+    "camera": "back.wide",
+    "mirror": false,
+    "orientation": "auto",
+    "encoder": "lowLatency",
+    "hwaccel": "none"
+  },
+  "audio": {
+    "enabled": true,
+    "processing": "standard",
+    "targetBufferMs": 40
+  },
+  "camera": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "friendlyName": "Mobile Webcam",
+    "backend": "auto"
+  },
+  "logging": {
+    "level": "info"
+  }
+}

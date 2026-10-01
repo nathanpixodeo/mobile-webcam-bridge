@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "accessUnitDelimiter": "0000000109f0",
+  "split": [
+    {
+      "name": "idr-with-parameter-sets",
+      "annexB": "000000016742c01f8c8d400000000168ce3c80000000016588840033ff",
+      "nals": [
+        {
+          "type": 7,
+          "hex": "6742c01f8c8d40"
+        },
+        {
+          "type": 8,
+          "hex": "68ce3c80"
+        },
+        {
+          "type": 5,
+          "hex": "6588840033ff"
+        }
+      ],
+      "isIdr": true,
+      "hasParameterSets": true
+    },
+    {
+      "name": "three-byte-start-codes-and-trailing-zero",
+      "annexB": "000001419a0000030000030180000000010605ff",
+      "nals": [
+        {
+          "type": 1,
+          "hex": "419a0000030000030180"
+        },
+        {
+          "type": 6,
+          "hex": "0605ff"
+        }
+      ],
+      "isIdr": false,
+      "hasParameterSets": false
+    }
+  ],
+  "avccToAnnexB": [
+    {
+      "name": "two-nals-length-prefixed",
+      "avcc": "00000004419a0203000000020605",
+      "annexB": "00000001419a0203000000010605"
+    },
+    {
+      "name": "idr-with-prepended-parameter-sets",
+      "sps": "6742c01f8c8d40",
+      "pps": "68ce3c80",
+      "avcc": "000000066588840033ff",
+      "annexB": "000000016742c01f8c8d400000000168ce3c80000000016588840033ff"
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+;
+; mwbmic.inx — MobileWebcamBridge virtual microphone ("Mobile Webcam Microphone").
+;
+; Derived from Windows-driver-samples/audio/simpleaudiosample (MS-PL), SimpleAudioSample.inx.
+; Modified for MobileWebcamBridge: one capture endpoint, WDM (no KMDF section), Windows 10 2004+
+; models section, no DRM/PETrust signature attributes, no idle power settings.
+;
+; StampInf turns this file into mwbmic.inf at build time ($ARCH$, DriverVer).
+;
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = MEDIA
+ClassGuid   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider    = %ProviderName%
+DriverVer   = 01/01/2026, 0.1.0.0
+CatalogFile = mwbmic.cat
+PnpLockdown = 1
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+mwbmic.sys = 1
+
+[Manufacturer]
+%MfgName% = MobileWebcamBridge, NT$ARCH$.10.0...19041
+
+[MobileWebcamBridge.NT$ARCH$.10.0...19041]
+%MobileWebcamBridgeMic.DeviceDesc% = MobileWebcamBridgeMic_Device, ROOT\MobileWebcamBridgeMic
+
+[DestinationDirs]
+MobileWebcamBridgeMic_Device.CopyList = 13 ; 13 = the package's DriverStore directory
+
+;======================================================
+; Device
+;======================================================
+[MobileWebcamBridgeMic_Device.CopyList]
+mwbmic.sys
+
+[MobileWebcamBridgeMic_Device.NT]
+Include   = ks.inf, wdmaudio.inf
+Needs     = KS.Registration, WDMAUDIO.Registration
+CopyFiles = MobileWebcamBridgeMic_Device.CopyList
+AddReg    = MobileWebcamBridgeMic_Device.AddReg
+
+[MobileWebcamBridgeMic_Device.AddReg]
+HKR,,AssociatedFilters,,"wdmaud"
+HKR,,Driver,,mwbmic.sys
+
+HKR,Drivers,SubClasses,,"wave,mixer"
+HKR,Drivers\wave\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\mixer\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\wave\wdmaud.drv,Description,,%MobileWebcamBridgeMic.DeviceDesc%
+HKR,Drivers\mixer\wdmaud.drv,Description,,%MobileWebcamBridgeMic.DeviceDesc%
+
+; Display name of the microphone pin (MWBMIC_PIN_NAME_GUID in mictopotable.h): the endpoint name.
+HKR,%MEDIA_CATEGORIES%\%MicPinNameGuid%,Name,,%MicPinName%
+
+[MobileWebcamBridgeMic_Device.NT.Interfaces]
+AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_WaveMic%,     MobileWebcamBridgeMic.I.WaveMic
+AddInterface = %KSCATEGORY_REALTIME%, %KSNAME_WaveMic%,     MobileWebcamBridgeMic.I.WaveMic
+AddInterface = %KSCATEGORY_CAPTURE%,  %KSNAME_WaveMic%,     MobileWebcamBridgeMic.I.WaveMic
+AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_TopologyMic%, MobileWebcamBridgeMic.I.TopologyMic
+AddInterface = %KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyMic%, MobileWebcamBridgeMic.I.TopologyMic
+
+[MobileWebcamBridgeMic_Device.NT.Services]
+AddService = MobileWebcamBridgeMic, 0x00000002, MobileWebcamBridgeMic_Service_Inst
+
+[MobileWebcamBridgeMic_Service_Inst]
+DisplayName   = %MobileWebcamBridgeMic.SvcDesc%
+ServiceType   = 1               ; SERVICE_KERNEL_DRIVER
+StartType     = 3               ; SERVICE_DEMAND_START
+ErrorControl  = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary = %13%\mwbmic.sys
+
+[MobileWebcamBridgeMic_Device.NT.HW]
+AddReg = MobileWebcamBridgeMic_Device.HW.AddReg
+
+[MobileWebcamBridgeMic_Device.HW.AddReg]
+; FILE_DEVICE_SOUND
+HKR,,DeviceType,0x10001,0x0000001D
+; Audio filters: SYSTEM all, Administrators/World/Restricted RWX (the standard audio device ACL).
+; The feed control device has its own, stricter ACL (MWBMIC_DEVICE_SDDL_W).
+HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGWGX;;;RC)"
+
+;======================================================
+; Capture interfaces
+;======================================================
+[MobileWebcamBridgeMic.I.WaveMic]
+AddReg = MobileWebcamBridgeMic.I.WaveMic.AddReg
+
+[MobileWebcamBridgeMic.I.WaveMic.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%MobileWebcamBridgeMic.WaveMic.szPname%
+
+[MobileWebcamBridgeMic.I.TopologyMic]
+AddReg = MobileWebcamBridgeMic.I.TopologyMic.AddReg
+
+[MobileWebcamBridgeMic.I.TopologyMic.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%MobileWebcamBridgeMic.TopologyMic.szPname%
+
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+
+; Opt in to event-driven (pull) mode.
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+
+;======================================================
+; Strings
+;======================================================
+[Strings]
+; Non-localizable
+
+KSNAME_WaveMic     = "WaveMicMwb"        ; must match MicWaveName in minipairs.h
+KSNAME_TopologyMic = "TopologyMicMwb"    ; must match MicTopologyName in minipairs.h
+
+Proxy.CLSID         = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+KSCATEGORY_AUDIO    = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_CAPTURE  = "{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_REALTIME = "{EB115FFC-10C8-4964-831D-6DCB02E6F23F}"
+KSCATEGORY_TOPOLOGY = "{DDA54A40-1E4C-11D1-A050-405705C10000}"
+KSNODETYPE_ANY      = "{00000000-0000-0000-0000-000000000000}"
+
+PKEY_AudioEndpoint_Association               = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+
+MEDIA_CATEGORIES = "MediaCategories"
+MicPinNameGuid   = "{8B92608F-CE35-4EF0-AE97-C2FBDBF095C3}"
+
+; Localizable
+
+ProviderName = "MobileWebcamBridge"
+MfgName      = "MobileWebcamBridge"
+DiskName     = "MobileWebcamBridge Virtual Microphone Installation Disk"
+
+MobileWebcamBridgeMic.DeviceDesc = "Mobile Webcam Bridge Audio"
+MobileWebcamBridgeMic.SvcDesc    = "Mobile Webcam Bridge virtual microphone driver"
+
+MobileWebcamBridgeMic.WaveMic.szPname     = "Mobile Webcam Microphone (Wave)"
+MobileWebcamBridgeMic.TopologyMic.szPname = "Mobile Webcam Microphone (Topology)"
+
+MicPinName = "Mobile Webcam Microphone"

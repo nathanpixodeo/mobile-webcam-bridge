@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Media Foundation virtual camera source (COM in-process server, x64 only). Loaded by Frame
+     Server (LocalService), Frame Server Monitor (LocalSystem) and client processes. `bridge-native
+     install` registers it in HKLM and calls MFCreateVirtualCamera with its CLSID. -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{27934E05-D0E7-4512-BAB4-28192736559C}</ProjectGuid>
+    <RootNamespace>vcam_mf</RootNamespace>
+    <ProjectName>vcam-mf</ProjectName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(MSBuildThisFileDirectory)..\build\UserMode.props" />
+  <PropertyGroup>
+    <TargetName>vcam-mf</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)src;$(MSBuildThisFileDirectory)..\common-um\include;$(MSBuildThisFileDirectory)..\common\include;$(MSBuildThisFileDirectory)..\third_party\wil\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- _WIN32_WINNT=0x0A00 alone pins NTDDI_VERSION to Windows 10 1507, which hides the
+           virtual camera, sensor profile and sample allocator control declarations.
+           NTDDI_WIN10_CO (0x0A00000B) = Windows 11 21H2, the first build with MFCreateVirtualCamera. -->
+      <PreprocessorDefinitions>NOMINMAX;NTDDI_VERSION=0x0A00000B;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <ModuleDefinitionFile>vcam-mf.def</ModuleDefinitionFile>
+      <AdditionalDependencies>mfplat.lib;mfuuid.lib;mfsensorgroup.lib;avrt.lib;ole32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Activator.h" />
+    <ClInclude Include="src\FrameDelivery.h" />
+    <ClInclude Include="src\Framework.h" />
+    <ClInclude Include="src\MediaSource.h" />
+    <ClInclude Include="src\MediaStream.h" />
+    <ClInclude Include="src\MediaTypes.h" />
+    <ClInclude Include="src\ModuleLifetime.h" />
+    <ClInclude Include="src\SampleWriter.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\Activator.cpp" />
+    <ClCompile Include="src\FrameDelivery.cpp" />
+    <ClCompile Include="src\MediaSource.cpp" />
+    <ClCompile Include="src\MediaStream.cpp" />
+    <ClCompile Include="src\MediaTypes.cpp" />
+    <ClCompile Include="src\Module.cpp" />
+    <ClCompile Include="src\SampleWriter.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="vcam-mf.def" />
+    <None Include="NOTICE.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="vcam-mf.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\common-um\common-um.vcxproj">
+      <Project>{AB860889-3A50-4C75-BE0E-C88E32464327}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

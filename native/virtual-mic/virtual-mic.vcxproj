@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{C7100C08-1925-4781-9458-A28DC8B951E2}</ProjectGuid>
+    <RootNamespace>virtual_mic</RootNamespace>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <DriverTargetPlatform>Windows Driver</DriverTargetPlatform>
+    <DriverType>WDM</DriverType>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <!-- /Qspectre (needs the "MSVC Spectre-mitigated libs" component). -->
+    <SpectreMitigation>Spectre</SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)' == 'Debug'">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)' == 'Release'">
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="KernelMode.props" />
+  </ImportGroup>
+
+  <PropertyGroup>
+    <TargetName>mwbmic</TargetName>
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+
+    <!-- Driver package (.sys + .inf + .cat): native/out/<Configuration>/x64/virtual-mic/ -->
+    <PackageDir>$(OutDir)virtual-mic\</PackageDir>
+    <EnableInf2cat>true</EnableInf2cat>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+    <!-- Windows 10 2004 (19041, "VB") and later, matching the INF models section. -->
+    <Inf2CatWindowsVersionList>10_VB_X64,10_CO_X64,10_NI_X64,10_GE_X64</Inf2CatWindowsVersionList>
+
+    <!-- The build never signs by itself. Test signing is opt-in (see MwbTestSignPackage below,
+         or scripts/sign-driver.ps1); release signing is Partner Center attestation. -->
+    <SignMode>Off</SignMode>
+    <MwbTestCertThumbprint Condition="'$(MwbTestCertThumbprint)' == ''">$(MWB_TEST_CERT_THUMBPRINT)</MwbTestCertThumbprint>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ClCompile Include="src\adapter.cpp" />
+    <ClCompile Include="src\common.cpp" />
+    <ClCompile Include="src\ControlDevice.cpp" />
+    <ClCompile Include="src\kshelper.cpp" />
+    <ClCompile Include="src\MicFeedBuffer.cpp" />
+    <ClCompile Include="src\mictopo.cpp" />
+    <ClCompile Include="src\minwavert.cpp" />
+    <ClCompile Include="src\minwavertstream.cpp" />
+    <ClCompile Include="src\NewDelete.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\common.h" />
+    <ClInclude Include="src\ControlDevice.h" />
+    <ClInclude Include="src\definitions.h" />
+    <ClInclude Include="src\endpoints.h" />
+    <ClInclude Include="src\kshelper.h" />
+    <ClInclude Include="src\MicFeedBuffer.h" />
+    <ClInclude Include="src\mictopo.h" />
+    <ClInclude Include="src\mictopotable.h" />
+    <ClInclude Include="src\micwavtable.h" />
+    <ClInclude Include="src\minipairs.h" />
+    <ClInclude Include="src\minwavert.h" />
+    <ClInclude Include="src\minwavertstream.h" />
+    <ClInclude Include="src\NewDelete.h" />
+    <ClInclude Include="..\common\include\mwb\MwbMicIoctl.h" />
+    <ClInclude Include="..\common\include\mwb\PcmRing.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="virtual-mic.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="mwbmic.inx" />
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+    <None Include="NOTICE.md" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <!--
+    Optional development test signing. Set MWB_TEST_CERT_THUMBPRINT (environment) or pass
+    /p:MwbTestCertThumbprint=<sha1> with a code-signing certificate from CurrentUser\My
+    (scripts/make-test-cert.ps1 creates one). Signing the .sys after Inf2Cat is safe: catalogs
+    store the PE image hash, which excludes the embedded signature.
+  -->
+  <Target Name="MwbTestSignPackage" AfterTargets="Build" Condition="'$(MwbTestCertThumbprint)' != ''">
+    <PropertyGroup>
+      <MwbSignTool>$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\signtool.exe</MwbSignTool>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(MwbSignTool)')" Text="signtool.exe not found at $(MwbSignTool)." />
+    <Error Condition="!Exists('$(PackageDir)mwbmic.cat')" Text="Driver package not found in $(PackageDir)." />
+    <Exec Command="&quot;$(MwbSignTool)&quot; sign /q /fd sha256 /s My /sha1 $(MwbTestCertThumbprint) &quot;$(PackageDir)mwbmic.sys&quot; &quot;$(PackageDir)mwbmic.cat&quot;" />
+  </Target>
+</Project>

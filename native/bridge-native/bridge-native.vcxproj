@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{68D10CDB-A7C5-433E-99DB-61240AA467B7}</ProjectGuid>
+    <RootNamespace>bridge_native</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)' == 'Debug'">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)' == 'Release'">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\build\UserMode.props" />
+  </ImportGroup>
+  <PropertyGroup>
+    <TargetName>bridge-native</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <!-- NTDDI_VERSION comes from UserMode.props. MFCreateVirtualCamera and DiUninstallDriverW are
+           resolved at run time, so the executable still starts on Windows 10. -->
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NOMINMAX;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableUAC>true</EnableUAC>
+      <UACExecutionLevel>AsInvoker</UACExecutionLevel>
+      <AdditionalDependencies>setupapi.lib;newdev.lib;cfgmgr32.lib;bcrypt.lib;advapi32.lib;shell32.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(MSBuildThisFileDirectory)bridge-native.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\commands\InfoCommands.cpp" />
+    <ClCompile Include="src\commands\InstallCommands.cpp" />
+    <ClCompile Include="src\commands\MicCommands.cpp" />
+    <ClCompile Include="src\commands\VideoCommands.cpp" />
+    <ClCompile Include="src\core\ArgParser.cpp" />
+    <ClCompile Include="src\core\Command.cpp" />
+    <ClCompile Include="src\core\Errors.cpp" />
+    <ClCompile Include="src\core\Json.cpp" />
+    <ClCompile Include="src\core\Output.cpp" />
+    <ClCompile Include="src\core\Strings.cpp" />
+    <ClCompile Include="src\doctor\Checks.cpp" />
+    <ClCompile Include="src\doctor\SystemProbes.cpp" />
+    <ClCompile Include="src\elevation\ElevationBroker.cpp" />
+    <ClCompile Include="src\install\CameraRegistrars.cpp" />
+    <ClCompile Include="src\install\ComponentSteps.cpp" />
+    <ClCompile Include="src\install\FileSteps.cpp" />
+    <ClCompile Include="src\install\InstallOptions.cpp" />
+    <ClCompile Include="src\install\InstallService.cpp" />
+    <ClCompile Include="src\install\MicDriver.cpp" />
+    <ClCompile Include="src\install\ProductRegistry.cpp" />
+    <ClCompile Include="src\install\StepRunner.cpp" />
+    <ClCompile Include="src\mic\MicDevice.cpp" />
+    <ClCompile Include="src\mic\MicFeeder.cpp" />
+    <ClCompile Include="src\platform\NamedPipe.cpp" />
+    <ClCompile Include="src\platform\OsVersion.cpp" />
+    <ClCompile Include="src\platform\Paths.cpp" />
+    <ClCompile Include="src\platform\Process.cpp" />
+    <ClCompile Include="src\platform\Registry.cpp" />
+    <ClCompile Include="src\platform\Security.cpp" />
+    <ClCompile Include="src\platform\Stdin.cpp" />
+    <ClCompile Include="src\video\ConsumerServer.cpp" />
+    <ClCompile Include="src\video\FrameAssembler.cpp" />
+    <ClCompile Include="src\video\FramePool.cpp" />
+    <ClCompile Include="src\video\FrameWatcher.cpp" />
+    <ClCompile Include="src\video\HubCommand.cpp" />
+    <ClCompile Include="src\video\HubSettings.cpp" />
+    <ClCompile Include="src\video\IngestServer.cpp" />
+    <ClCompile Include="src\video\OutputPolicy.cpp" />
+    <ClCompile Include="src\video\PlaceholderStore.cpp" />
+    <ClCompile Include="src\video\VideoHub.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\**\*.h" />
+    <ClInclude Include="..\common\include\mwb\*.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bridge-native.manifest" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

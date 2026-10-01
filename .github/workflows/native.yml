@@ -1,0 +1,43 @@
+name: native
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - native/**
+      - protocol/**
+      - scripts/build-native.ps1
+      - .github/workflows/native.yml
+  pull_request:
+    paths:
+      - native/**
+      - protocol/**
+      - scripts/build-native.ps1
+      - .github/workflows/native.yml
+  workflow_dispatch:
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # TODO: build mwbmic.sys here as well once the WDK is provisioned on the runner
+      # (NuGet package Microsoft.Windows.WDK.x64 10.0.26100.x plus the matching SDK). Until then
+      # the driver is built and test-signed locally.
+      - name: Build user-mode components and run unit tests
+        shell: pwsh
+        run: ./scripts/build-native.ps1 -Configuration Release -SkipDriver
+
+      - name: Upload stage folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-stage
+          path: native/out/Release/stage
+          if-no-files-found: error

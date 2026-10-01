@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mobile Webcam</string>
+    <string name="notification_channel_name">Streaming</string>
+    <string name="notification_channel_description">Shown while the phone serves its camera and microphone to the computer.</string>
+    <string name="notification_title">Mobile Webcam is ready</string>
+    <string name="notification_text">Waiting for the computer over USB</string>
+    <string name="notification_stop">Stop</string>
+</resources>

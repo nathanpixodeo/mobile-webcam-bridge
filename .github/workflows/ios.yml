@@ -1,0 +1,99 @@
+name: ios
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - "protocol/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - "protocol/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bridgekit:
+    name: BridgeKit tests (Linux)
+    # Linux minutes cost a tenth of macOS minutes: the protocol, scheduling and session logic is
+    # verified here before any macOS time is spent.
+    runs-on: ubuntu-latest
+    container: swift:6.4-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: swift test
+        run: swift test --package-path ios/BridgeKit
+
+  ipa:
+    name: Unsigned IPA
+    needs: bridgekit
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Archive (unsigned)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project MobileWebcam.xcodeproj \
+            -scheme MobileWebcam \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/MobileWebcam.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            GIT_COMMIT="${GITHUB_SHA::7}" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Package IPA
+        run: |
+          app="$RUNNER_TEMP/MobileWebcam.xcarchive/Products/Applications/MobileWebcam.app"
+          test -d "$app"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry MobileWebcam.ipa Payload)
+          ls -l "$RUNNER_TEMP/ipa/MobileWebcam.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-webcam-ipa
+          path: ${{ runner.temp }}/ipa/MobileWebcam.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7
