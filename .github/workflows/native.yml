@@ -58,7 +58,11 @@ jobs:
       - name: Restore the WDK NuGet packages
         run: nuget restore native\virtual-mic\packages.config -PackagesDirectory native\packages -NonInteractive
 
-      - uses: microsoft/setup-msbuild@v2
+      # 64-bit MSBuild: the NuGet WDK targets locate stampinf.exe through $(Processor_Architecture),
+      # which is x86 inside the default 32-bit MSBuild (TRK0005).
+      - uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x64
 
       - name: Build mwbmic.sys (unsigned)
         run: msbuild native\virtual-mic\virtual-mic.vcxproj -p:Configuration=Release -p:Platform=x64 -p:TargetVersion=Windows10 -nologo -clp:Verbosity=minimal

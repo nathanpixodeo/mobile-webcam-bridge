@@ -26,6 +26,12 @@
           Condition="Exists('$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.x64.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.x64.props') and '$(Platform)' == 'x64'" />
   <Import Project="$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.props"
           Condition="Exists('$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.props')" />
+  <!--
+    With the NuGet WDK, the WDK targets set the stampinf/tracewpp/mc tool paths only when
+    $(Processor_Architecture) is AMD64 or ARM64, so the build must run under the 64-bit MSBuild
+    (MSBuild\Current\Bin\amd64). Under the x86 MSBuild the build fails with
+    TRK0005 "Failed to locate: stampinf.exe".
+  -->
 
   <PropertyGroup>
     <MwbNativeRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</MwbNativeRoot>

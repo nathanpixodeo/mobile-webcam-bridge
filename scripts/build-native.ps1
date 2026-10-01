@@ -38,10 +38,20 @@ function Get-MSBuildPath {
     if (-not (Test-Path $vswhere)) {
         throw 'Visual Studio 2022 (or Build Tools) is not installed: vswhere.exe was not found.'
     }
-    $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' |
-        Select-Object -First 1
-    if (-not $msbuild) { throw 'MSBuild was not found. Install Visual Studio Build Tools 2022 with the C++ workload.' }
-    return $msbuild
+    # Prefer the MSBuild matching the OS architecture: the NuGet WDK targets locate stampinf.exe
+    # through $(Processor_Architecture), which is x86 inside the 32-bit MSBuild.
+    $hostFolder = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+        'X64' { 'amd64' }
+        'Arm64' { 'arm64' }
+        default { $null }
+    }
+    $patterns = @(if ($hostFolder) { "MSBuild\**\Bin\$hostFolder\MSBuild.exe" }) + 'MSBuild\**\Bin\MSBuild.exe'
+    foreach ($pattern in $patterns) {
+        $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find $pattern |
+            Select-Object -First 1
+        if ($msbuild) { return $msbuild }
+    }
+    throw 'MSBuild was not found. Install Visual Studio Build Tools 2022 with the C++ workload.'
 }
 
 function Assert-WindowsSdk {
@@ -99,7 +109,7 @@ function Write-WdkDiagnostics {
     $kitsRoot = Split-Path -Parent $kitsInclude
     Get-ChildItem $kitsRoot -Recurse -Filter 'wdm.h' -ErrorAction SilentlyContinue | Select-Object -First 5 |
         ForEach-Object { Write-Host "  wdm.h found: $($_.FullName)" }
-    $vsRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:msbuild)))
+    $vsRoot = $script:msbuild.Substring(0, $script:msbuild.IndexOf('\MSBuild\', [StringComparison]::OrdinalIgnoreCase))
     Get-ChildItem $vsRoot -Recurse -Directory -Filter 'WindowsKernelModeDriver10.0' -ErrorAction SilentlyContinue |
         Select-Object -First 3 | ForEach-Object { Write-Host "  kernel toolset: $($_.FullName)" }
 }
