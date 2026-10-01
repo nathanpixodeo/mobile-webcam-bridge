@@ -29,7 +29,10 @@ TEST_SUITE("JsonWriter") {
     TEST_CASE("escapes quotes, backslashes and control characters, not slashes") {
         JsonWriter writer;
         writer.String(std::string_view("a\"b\\c/d\n\t\x01"));
-        CHECK(writer.Take() == R"("a\"b\\c/d\n\t\u0001")");
+        // Raw strings containing backslashes must stay out of CHECK(): MSVC's traditional
+        // preprocessor mis-stringizes them (C2017).
+        const std::string expected = R"("a\"b\\c/d\n\t\u0001")";
+        CHECK(writer.Take() == expected);
     }
 
     TEST_CASE("passes valid UTF-8 through and replaces invalid bytes") {
@@ -39,7 +42,8 @@ TEST_SUITE("JsonWriter") {
 
         JsonWriter invalid;
         invalid.String(std::string_view("a\xFF" "b"));
-        CHECK(invalid.Take() == R"("a\ufffdb")");
+        const std::string expectedInvalid = R"("a\ufffdb")";
+        CHECK(invalid.Take() == expectedInvalid);
     }
 
     TEST_CASE("converts UTF-16 including surrogate pairs") {
@@ -79,19 +83,19 @@ TEST_SUITE("JsonParser") {
     }
 
     TEST_CASE("rejects malformed input") {
-        CHECK_THROWS_AS(ParseJson("{\"a\":1,}"), JsonParseError);         // trailing comma
-        CHECK_THROWS_AS(ParseJson("{\"a\":1,\"a\":2}"), JsonParseError);  // duplicate key
-        CHECK_THROWS_AS(ParseJson("[1] x"), JsonParseError);              // trailing data
-        CHECK_THROWS_AS(ParseJson("\"\\ud83d\""), JsonParseError);        // lone surrogate
-        CHECK_THROWS_AS(ParseJson("\"tab\there\""), JsonParseError);      // raw control character
-        CHECK_THROWS_AS(ParseJson("01"), JsonParseError);                 // leading zero
-        CHECK_THROWS_AS(ParseJson("\"\xFF\""), JsonParseError);           // invalid UTF-8
-        CHECK_THROWS_AS(ParseJson("// comment\n1"), JsonParseError);
+        CHECK_THROWS_AS((void)ParseJson("{\"a\":1,}"), JsonParseError);         // trailing comma
+        CHECK_THROWS_AS((void)ParseJson("{\"a\":1,\"a\":2}"), JsonParseError);  // duplicate key
+        CHECK_THROWS_AS((void)ParseJson("[1] x"), JsonParseError);              // trailing data
+        CHECK_THROWS_AS((void)ParseJson("\"\\ud83d\""), JsonParseError);        // lone surrogate
+        CHECK_THROWS_AS((void)ParseJson("\"tab\there\""), JsonParseError);      // raw control character
+        CHECK_THROWS_AS((void)ParseJson("01"), JsonParseError);                 // leading zero
+        CHECK_THROWS_AS((void)ParseJson("\"\xFF\""), JsonParseError);           // invalid UTF-8
+        CHECK_THROWS_AS((void)ParseJson("// comment\n1"), JsonParseError);
     }
 
     TEST_CASE("enforces depth and size limits") {
-        CHECK_THROWS_AS(ParseJson("[[[[1]]]]", JsonParseLimits{3, 1024}), JsonParseError);
+        CHECK_THROWS_AS((void)ParseJson("[[[[1]]]]", JsonParseLimits{3, 1024}), JsonParseError);
         CHECK_NOTHROW((void)ParseJson("[[[1]]]", JsonParseLimits{3, 1024}));
-        CHECK_THROWS_AS(ParseJson("\"0123456789\"", JsonParseLimits{16, 8}), JsonParseError);
+        CHECK_THROWS_AS((void)ParseJson("\"0123456789\"", JsonParseLimits{16, 8}), JsonParseError);
     }
 }
