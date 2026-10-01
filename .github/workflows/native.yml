@@ -1,3 +1,5 @@
+# Native components: bridge-native.exe, the camera DLLs and the native unit tests (job "build"), and
+# the virtual microphone driver (job "driver"). Runs on changes to native/ or protocol/, or manually.
 name: native
 
 on:
@@ -20,23 +22,50 @@ concurrency:
   group: native-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: User-mode components and tests
     runs-on: windows-2025
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      # The runner has the WDK MSBuild integration but no kernel headers: the driver builds
-      # against the WDK NuGet packages (unsigned; test signing happens locally).
-      - name: Build all native components and run unit tests
+      - name: Build user-mode components and run unit tests
         shell: pwsh
-        run: ./scripts/build-native.ps1 -Configuration Release -RequireDriver -UseWdkNuGet
+        run: ./scripts/build-native.ps1 -Configuration Release -SkipDriver
 
       - name: Upload stage folder
         uses: actions/upload-artifact@v7
         with:
           name: native-stage
           path: native/out/Release/stage
+          if-no-files-found: error
+
+  driver:
+    name: Virtual microphone driver
+    # Same image and WDK NuGet packages as microsoft/Windows-driver-samples CI: the plain
+    # windows-2025 image has the WDK MSBuild integration but neither kernel headers nor tools.
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore the WDK NuGet packages
+        run: nuget restore native\virtual-mic\packages.config -PackagesDirectory native\packages -NonInteractive
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build mwbmic.sys (unsigned)
+        run: msbuild native\virtual-mic\virtual-mic.vcxproj -p:Configuration=Release -p:Platform=x64 -p:TargetVersion=Windows10 -nologo -clp:Verbosity=minimal
+
+      - name: Upload driver package
+        uses: actions/upload-artifact@v7
+        with:
+          name: driver-package
+          path: native/out/Release/x64/virtual-mic
           if-no-files-found: error
