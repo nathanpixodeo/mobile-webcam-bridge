@@ -24,19 +24,18 @@ jobs:
   build:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      # TODO: build mwbmic.sys here as well once the WDK is provisioned on the runner
-      # (NuGet package Microsoft.Windows.WDK.x64 10.0.26100.x plus the matching SDK). Until then
-      # the driver is built and test-signed locally.
-      - name: Build user-mode components and run unit tests
+      # The windows-2025 image ships the WDK 10.0.26100 Visual Studio component, so the driver
+      # builds here too (unsigned; test signing happens locally with scripts/sign-driver.ps1).
+      - name: Build all native components and run unit tests
         shell: pwsh
-        run: ./scripts/build-native.ps1 -Configuration Release -SkipDriver
+        run: ./scripts/build-native.ps1 -Configuration Release
 
       - name: Upload stage folder
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage
           path: native/out/Release/stage
