@@ -5,6 +5,7 @@ on:
     paths: ['host/**', 'protocol/**', '.github/workflows/host.yml']
   pull_request:
     paths: ['host/**', 'protocol/**', '.github/workflows/host.yml']
+  workflow_dispatch:
 
 concurrency:
   group: host-${{ github.ref }}

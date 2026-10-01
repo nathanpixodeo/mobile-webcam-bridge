@@ -15,6 +15,7 @@ on:
       - scripts/build-native.ps1
       - .github/workflows/native.yml
   workflow_dispatch:
+  workflow_dispatch:
 
 concurrency:
   group: native-${{ github.ref }}
