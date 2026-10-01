@@ -15,6 +15,9 @@ param(
     # Skip mwbmic.sys. Implied when the WDK is not installed.
     [switch] $SkipDriver,
 
+    # Fail instead of skipping when the WDK cannot be found (CI).
+    [switch] $RequireDriver,
+
     [switch] $SkipTests
 )
 
@@ -62,6 +65,20 @@ function Test-Wdk {
     return [bool]$kernelHeaders
 }
 
+# Prints where kernel headers and the WDK MSBuild toolset actually are, to diagnose detection.
+function Write-WdkDiagnostics {
+    Write-Host "Windows Kits include folders under ${kitsInclude}:"
+    Get-ChildItem $kitsInclude -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-Host ("  {0}  km={1}  um={2}" -f $_.Name, (Test-Path (Join-Path $_.FullName 'km')), (Test-Path (Join-Path $_.FullName 'um')))
+    }
+    $kitsRoot = Split-Path -Parent $kitsInclude
+    Get-ChildItem $kitsRoot -Recurse -Filter 'wdm.h' -ErrorAction SilentlyContinue | Select-Object -First 5 |
+        ForEach-Object { Write-Host "  wdm.h found: $($_.FullName)" }
+    $vsRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:msbuild)))
+    Get-ChildItem $vsRoot -Recurse -Directory -Filter 'WindowsKernelModeDriver10.0' -ErrorAction SilentlyContinue |
+        Select-Object -First 3 | ForEach-Object { Write-Host "  kernel toolset: $($_.FullName)" }
+}
+
 function Invoke-ProjectBuild {
     param([string] $Project, [string] $Platform)
 
@@ -93,6 +110,8 @@ $built = @{
 
 $buildDriver = -not $SkipDriver
 if ($buildDriver -and -not (Test-Wdk)) {
+    Write-WdkDiagnostics
+    if ($RequireDriver) { throw 'The WDK kernel headers were not found (see the diagnostics above).' }
     Write-Warning 'The WDK is not installed: skipping mwbmic.sys (VS component Microsoft.Windows.DriverKit).'
     $buildDriver = $false
 }
