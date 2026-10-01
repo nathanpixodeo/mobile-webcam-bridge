@@ -51,24 +51,24 @@ STDMETHODIMP Activator::DetachObject() {
 
 // ---- IMFAttributes delegation ----
 
-STDMETHODIMP Activator::GetItem(REFGUID key, PROPVARIANT* value) { return store_->GetItem(key, value); }
+STDMETHODIMP Activator::GetItem(REFGUID key, PROPVARIANT* itemValue) { return store_->GetItem(key, itemValue); }
 STDMETHODIMP Activator::GetItemType(REFGUID key, MF_ATTRIBUTE_TYPE* type) { return store_->GetItemType(key, type); }
-STDMETHODIMP Activator::CompareItem(REFGUID key, REFPROPVARIANT value, BOOL* result) {
-    return store_->CompareItem(key, value, result);
+STDMETHODIMP Activator::CompareItem(REFGUID key, REFPROPVARIANT itemValue, BOOL* result) {
+    return store_->CompareItem(key, itemValue, result);
 }
 STDMETHODIMP Activator::Compare(IMFAttributes* theirs, MF_ATTRIBUTES_MATCH_TYPE matchType, BOOL* result) {
     return store_->Compare(theirs, matchType, result);
 }
-STDMETHODIMP Activator::GetUINT32(REFGUID key, UINT32* value) { return store_->GetUINT32(key, value); }
-STDMETHODIMP Activator::GetUINT64(REFGUID key, UINT64* value) { return store_->GetUINT64(key, value); }
-STDMETHODIMP Activator::GetDouble(REFGUID key, double* value) { return store_->GetDouble(key, value); }
-STDMETHODIMP Activator::GetGUID(REFGUID key, GUID* value) { return store_->GetGUID(key, value); }
+STDMETHODIMP Activator::GetUINT32(REFGUID key, UINT32* itemValue) { return store_->GetUINT32(key, itemValue); }
+STDMETHODIMP Activator::GetUINT64(REFGUID key, UINT64* itemValue) { return store_->GetUINT64(key, itemValue); }
+STDMETHODIMP Activator::GetDouble(REFGUID key, double* itemValue) { return store_->GetDouble(key, itemValue); }
+STDMETHODIMP Activator::GetGUID(REFGUID key, GUID* itemValue) { return store_->GetGUID(key, itemValue); }
 STDMETHODIMP Activator::GetStringLength(REFGUID key, UINT32* length) { return store_->GetStringLength(key, length); }
-STDMETHODIMP Activator::GetString(REFGUID key, LPWSTR value, UINT32 size, UINT32* length) {
-    return store_->GetString(key, value, size, length);
+STDMETHODIMP Activator::GetString(REFGUID key, LPWSTR itemValue, UINT32 size, UINT32* length) {
+    return store_->GetString(key, itemValue, size, length);
 }
-STDMETHODIMP Activator::GetAllocatedString(REFGUID key, LPWSTR* value, UINT32* length) {
-    return store_->GetAllocatedString(key, value, length);
+STDMETHODIMP Activator::GetAllocatedString(REFGUID key, LPWSTR* itemValue, UINT32* length) {
+    return store_->GetAllocatedString(key, itemValue, length);
 }
 STDMETHODIMP Activator::GetBlobSize(REFGUID key, UINT32* size) { return store_->GetBlobSize(key, size); }
 STDMETHODIMP Activator::GetBlob(REFGUID key, UINT8* buffer, UINT32 bufferSize, UINT32* blobSize) {
@@ -78,21 +78,21 @@ STDMETHODIMP Activator::GetAllocatedBlob(REFGUID key, UINT8** buffer, UINT32* si
     return store_->GetAllocatedBlob(key, buffer, size);
 }
 STDMETHODIMP Activator::GetUnknown(REFGUID key, REFIID riid, LPVOID* object) { return store_->GetUnknown(key, riid, object); }
-STDMETHODIMP Activator::SetItem(REFGUID key, REFPROPVARIANT value) { return store_->SetItem(key, value); }
+STDMETHODIMP Activator::SetItem(REFGUID key, REFPROPVARIANT itemValue) { return store_->SetItem(key, itemValue); }
 STDMETHODIMP Activator::DeleteItem(REFGUID key) { return store_->DeleteItem(key); }
 STDMETHODIMP Activator::DeleteAllItems() { return store_->DeleteAllItems(); }
-STDMETHODIMP Activator::SetUINT32(REFGUID key, UINT32 value) { return store_->SetUINT32(key, value); }
-STDMETHODIMP Activator::SetUINT64(REFGUID key, UINT64 value) { return store_->SetUINT64(key, value); }
-STDMETHODIMP Activator::SetDouble(REFGUID key, double value) { return store_->SetDouble(key, value); }
-STDMETHODIMP Activator::SetGUID(REFGUID key, REFGUID value) { return store_->SetGUID(key, value); }
-STDMETHODIMP Activator::SetString(REFGUID key, LPCWSTR value) { return store_->SetString(key, value); }
+STDMETHODIMP Activator::SetUINT32(REFGUID key, UINT32 itemValue) { return store_->SetUINT32(key, itemValue); }
+STDMETHODIMP Activator::SetUINT64(REFGUID key, UINT64 itemValue) { return store_->SetUINT64(key, itemValue); }
+STDMETHODIMP Activator::SetDouble(REFGUID key, double itemValue) { return store_->SetDouble(key, itemValue); }
+STDMETHODIMP Activator::SetGUID(REFGUID key, REFGUID itemValue) { return store_->SetGUID(key, itemValue); }
+STDMETHODIMP Activator::SetString(REFGUID key, LPCWSTR itemValue) { return store_->SetString(key, itemValue); }
 STDMETHODIMP Activator::SetBlob(REFGUID key, const UINT8* buffer, UINT32 size) { return store_->SetBlob(key, buffer, size); }
 STDMETHODIMP Activator::SetUnknown(REFGUID key, IUnknown* unknown) { return store_->SetUnknown(key, unknown); }
 STDMETHODIMP Activator::LockStore() { return store_->LockStore(); }
 STDMETHODIMP Activator::UnlockStore() { return store_->UnlockStore(); }
 STDMETHODIMP Activator::GetCount(UINT32* count) { return store_->GetCount(count); }
-STDMETHODIMP Activator::GetItemByIndex(UINT32 index, GUID* key, PROPVARIANT* value) {
-    return store_->GetItemByIndex(index, key, value);
+STDMETHODIMP Activator::GetItemByIndex(UINT32 index, GUID* key, PROPVARIANT* itemValue) {
+    return store_->GetItemByIndex(index, key, itemValue);
 }
 STDMETHODIMP Activator::CopyAllItems(IMFAttributes* destination) { return store_->CopyAllItems(destination); }
 

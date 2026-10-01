@@ -109,10 +109,10 @@ STDMETHODIMP MediaSource::GetEvent(DWORD flags, IMFMediaEvent** event) {
     return queue->GetEvent(flags, event);
 }
 
-STDMETHODIMP MediaSource::QueueEvent(MediaEventType type, REFGUID extendedType, HRESULT status, const PROPVARIANT* value) {
+STDMETHODIMP MediaSource::QueueEvent(MediaEventType type, REFGUID extendedType, HRESULT status, const PROPVARIANT* eventValue) {
     auto lock = lock_.lock_exclusive();
     RETURN_IF_FAILED_EXPECTED(CheckShutdownRequiresLock());
-    return eventQueue_->QueueEventParamVar(type, extendedType, status, value);
+    return eventQueue_->QueueEventParamVar(type, extendedType, status, eventValue);
 }
 
 // ---- IMFMediaSource ----
