@@ -18,6 +18,10 @@ param(
     # Fail instead of skipping when the WDK cannot be found (CI).
     [switch] $RequireDriver,
 
+    # Restore the WDK/SDK NuGet packages (native/virtual-mic/packages.config) and build the driver
+    # against them; for machines without the WDK installed, such as CI runners.
+    [switch] $UseWdkNuGet,
+
     [switch] $SkipTests
 )
 
@@ -60,9 +64,30 @@ The Windows SDK is not installed (Windows Kits\10\Include has no um\windows.h). 
 }
 
 function Test-Wdk {
+    $nugetWdk = Get-ChildItem (Join-Path $nativeRoot 'packages') -Directory -Filter 'Microsoft.Windows.WDK.x64.*' -ErrorAction SilentlyContinue
+    if ($nugetWdk) { return $true }
     $kernelHeaders = Get-ChildItem $kitsInclude -Directory -ErrorAction SilentlyContinue |
         Where-Object { Test-Path (Join-Path $_.FullName 'km\wdm.h') }
     return [bool]$kernelHeaders
+}
+
+# Restores the WDK/SDK NuGet packages listed in native/virtual-mic/packages.config.
+function Restore-WdkNuGet {
+    $command = Get-Command nuget -ErrorAction SilentlyContinue
+    $nuget = if ($command) { $command.Source } else { $null }
+    if (-not $nuget) {
+        $toolsDir = Join-Path $nativeRoot 'out\tools'
+        New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+        $nuget = Join-Path $toolsDir 'nuget.exe'
+        if (-not (Test-Path $nuget)) {
+            Write-Host 'Downloading nuget.exe'
+            Invoke-WebRequest 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $nuget
+        }
+    }
+    $config = Join-Path $nativeRoot 'virtual-mic\packages.config'
+    Write-Host '==> restoring WDK NuGet packages'
+    & $nuget restore $config -PackagesDirectory (Join-Path $nativeRoot 'packages') -NonInteractive | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'nuget restore of the WDK packages failed.' }
 }
 
 # Prints where kernel headers and the WDK MSBuild toolset actually are, to diagnose detection.
@@ -109,6 +134,7 @@ $built = @{
 }
 
 $buildDriver = -not $SkipDriver
+if ($buildDriver -and $UseWdkNuGet) { Restore-WdkNuGet }
 if ($buildDriver -and -not (Test-Wdk)) {
     Write-WdkDiagnostics
     if ($RequireDriver) { throw 'The WDK kernel headers were not found (see the diagnostics above).' }

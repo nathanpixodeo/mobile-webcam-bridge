@@ -28,11 +28,11 @@ jobs:
         with:
           submodules: recursive
 
-      # The windows-2025 image ships the WDK 10.0.26100 Visual Studio component, so the driver
-      # builds here too (unsigned; test signing happens locally with scripts/sign-driver.ps1).
+      # The runner has the WDK MSBuild integration but no kernel headers: the driver builds
+      # against the WDK NuGet packages (unsigned; test signing happens locally).
       - name: Build all native components and run unit tests
         shell: pwsh
-        run: ./scripts/build-native.ps1 -Configuration Release -RequireDriver
+        run: ./scripts/build-native.ps1 -Configuration Release -RequireDriver -UseWdkNuGet
 
       - name: Upload stage folder
         uses: actions/upload-artifact@v7

@@ -11,6 +11,22 @@
     native/out/<Configuration>/x64/virtual-mic/               driver package: .sys, .inf, .cat
 -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    WDK/SDK from NuGet (packages.config, restored into native/packages by
+    `scripts/build-native.ps1 -UseWdkNuGet`). Imported only when restored, so machines with the
+    WDK installed through Visual Studio keep using it.
+  -->
+  <PropertyGroup>
+    <MwbWdkNuGetVersion>10.0.28000.2526</MwbWdkNuGetVersion>
+    <MwbPackagesDir>$(MSBuildThisFileDirectory)..\packages\</MwbPackagesDir>
+  </PropertyGroup>
+  <Import Project="$(MwbPackagesDir)Microsoft.Windows.WDK.x64.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.WDK.x64.props"
+          Condition="Exists('$(MwbPackagesDir)Microsoft.Windows.WDK.x64.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.WDK.x64.props') and '$(Platform)' == 'x64'" />
+  <Import Project="$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.x64.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.x64.props"
+          Condition="Exists('$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.x64.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.x64.props') and '$(Platform)' == 'x64'" />
+  <Import Project="$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.props"
+          Condition="Exists('$(MwbPackagesDir)Microsoft.Windows.SDK.CPP.$(MwbWdkNuGetVersion)\build\native\Microsoft.Windows.SDK.cpp.props')" />
+
   <PropertyGroup>
     <MwbNativeRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</MwbNativeRoot>
     <OutDir>$(MwbNativeRoot)out\$(Configuration)\$(Platform)\</OutDir>
