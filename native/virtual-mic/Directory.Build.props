@@ -3,12 +3,8 @@
   Imported automatically by virtual-mic.vcxproj. It shadows native/Directory.Build.props (MSBuild
   only imports the nearest Directory.Build.props), so nothing of the user-mode settings leaks into
   the kernel build. It runs before Microsoft.Cpp.Default.props and therefore only sets properties
-  that are safe that early; compiler and linker settings live in KernelMode.props, which the
-  project imports after Microsoft.Cpp.props.
-
-  Output layout (protocol/BRIDGE_NATIVE.md §4):
-    native/out/<Configuration>/x64/mwbmic.sys            build output
-    native/out/<Configuration>/x64/virtual-mic/               driver package: .sys, .inf, .cat
+  that are safe that early; output folders, compiler and linker settings live in KernelMode.props,
+  which the project imports after Microsoft.Cpp.props.
 -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <!--
@@ -35,8 +31,6 @@
 
   <PropertyGroup>
     <MwbNativeRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))</MwbNativeRoot>
-    <OutDir>$(MwbNativeRoot)out\$(Configuration)\$(Platform)\</OutDir>
-    <IntDir>$(MwbNativeRoot)out\obj\$(Configuration)\$(Platform)\$(MSBuildProjectName)\</IntDir>
     <!-- The kernel-mode toolset picks the newest installed WDK/SDK pair by default. -->
   </PropertyGroup>
 </Project>

@@ -4,6 +4,18 @@
   Microsoft.Cpp.props so that these values win over the toolset defaults.
 -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Output layout (protocol/BRIDGE_NATIVE.md §4). Set here rather than in Directory.Build.props:
+    the WDK's WindowsDriver.Shared.props (imported by Microsoft.Cpp.props) overrides OutDir and
+    IntDir set any earlier.
+      native/out/<Configuration>/x64/mwbmic.sys          build output
+      native/out/<Configuration>/x64/virtual-mic/        driver package: .sys, .inf, .cat
+  -->
+  <PropertyGroup>
+    <OutDir>$(MwbNativeRoot)out\$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(MwbNativeRoot)out\obj\$(Configuration)\$(Platform)\$(MSBuildProjectName)\</IntDir>
+  </PropertyGroup>
+
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)src;$(MwbNativeRoot)common\include;$(DDK_INC_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

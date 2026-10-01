@@ -12,7 +12,8 @@ Abstract:
 
     Derived from Windows-driver-samples/audio/simpleaudiosample (MS-PL).
     Modified for MobileWebcamBridge: noexcept operators; ExFreePool (tag-agnostic) so
-    objects allocated with a component tag can be deleted through any path.
+    objects allocated with a component tag can be deleted through any path. The unsized
+    operator delete(void*) is not defined here: stdunk.lib provides it (also ExFreePool).
 --*/
 
 #include "definitions.h"
@@ -45,14 +46,6 @@ void __cdecl operator delete(_Pre_maybenull_ __drv_freesMem(Mem) PVOID pVoid, _I
 {
     UNREFERENCED_PARAMETER(cbSize);
 
-    if (pVoid != nullptr)
-    {
-        ExFreePool(pVoid);
-    }
-}
-
-void __cdecl operator delete(_Pre_maybenull_ __drv_freesMem(Mem) PVOID pVoid) noexcept
-{
     if (pVoid != nullptr)
     {
         ExFreePool(pVoid);

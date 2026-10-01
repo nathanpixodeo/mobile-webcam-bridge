@@ -24,9 +24,9 @@ PVOID operator new(size_t iSize, POOL_FLAGS poolFlags, ULONG tag) noexcept;
 // Allocates from the given pool with the driver's default tag. Returns nullptr on failure.
 PVOID operator new(size_t iSize, POOL_FLAGS poolFlags) noexcept;
 
+// The unsized operator delete(void*) comes from stdunk.lib.
 void __cdecl operator delete(PVOID pVoid, ULONG tag) noexcept;
 void __cdecl operator delete(_Pre_maybenull_ __drv_freesMem(Mem) PVOID pVoid, _In_ size_t cbSize) noexcept;
-void __cdecl operator delete(_Pre_maybenull_ __drv_freesMem(Mem) PVOID pVoid) noexcept;
 void __cdecl operator delete[](_Pre_maybenull_ __drv_freesMem(Mem) PVOID pVoid, _In_ size_t cbSize) noexcept;
 void __cdecl operator delete[](_Pre_maybenull_ __drv_freesMem(Mem) PVOID pVoid) noexcept;
 
