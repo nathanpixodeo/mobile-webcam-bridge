@@ -14,6 +14,8 @@ import dev.mobilewebcambridge.android.core.SerialThread
 import dev.mobilewebcambridge.protocol.media.AnnexB
 import dev.mobilewebcambridge.protocol.media.EncodedVideoFrame
 import dev.mobilewebcambridge.protocol.messages.EncoderMode
+import dev.mobilewebcambridge.protocol.policy.EncodeSizePlanner
+import dev.mobilewebcambridge.protocol.policy.EncodeTarget
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -128,6 +130,22 @@ class H264Encoder private constructor(
 
     /** Creates hardware H.264 encoders configured for low latency. */
     class Factory(private val logger: AppLogger) : VideoEncoderFactory {
+        override fun fit(requested: EncodeTarget): EncodeTarget {
+            val video = findEncoder()?.getCapabilitiesForType(MIME)?.videoCapabilities ?: return requested
+            // The frame may be encoded in portrait, so a size must work in both orientations.
+            val fitted = EncodeSizePlanner.plan(requested, video.widthAlignment, video.heightAlignment) { width, height, fps ->
+                video.areSizeAndRateSupported(width, height, fps.toDouble()) &&
+                    video.areSizeAndRateSupported(height, width, fps.toDouble())
+            }
+            if (fitted != requested) {
+                logger.warn(
+                    "encoder",
+                    "${requested.width}x${requested.height}@${requested.fps} unsupported, using ${fitted.width}x${fitted.height}@${fitted.fps}",
+                )
+            }
+            return fitted
+        }
+
         override fun create(
             configId: Int,
             settings: EncoderSettings,

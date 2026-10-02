@@ -157,8 +157,8 @@ public struct StartVideoMessage: Codable, Equatable, Sendable {
         guard (15...60).contains(fps) else {
             throw MessageDecodingError.invalidValue(type: .startVideo, detail: "fps \(fps) out of range 15-60")
         }
-        guard (500...20_000).contains(bitrateKbps) else {
-            throw MessageDecodingError.invalidValue(type: .startVideo, detail: "bitrate \(bitrateKbps) out of range 500-20000")
+        guard (500...40_000).contains(bitrateKbps) else {
+            throw MessageDecodingError.invalidValue(type: .startVideo, detail: "bitrate \(bitrateKbps) out of range 500-40000")
         }
     }
 }

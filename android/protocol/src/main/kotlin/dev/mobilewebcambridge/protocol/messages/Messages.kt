@@ -146,7 +146,7 @@ data class StartVideoMessage(
                 fields.invalid("width/height", "size ${message.width}x${message.height} out of range")
             }
             if (message.fps !in 15..60) fields.invalid("fps", "${message.fps} out of range 15-60")
-            if (message.bitrateKbps !in 500..20_000) fields.invalid("bitrateKbps", "${message.bitrateKbps} out of range 500-20000")
+            if (message.bitrateKbps !in 500..40_000) fields.invalid("bitrateKbps", "${message.bitrateKbps} out of range 500-40000")
             return message
         }
     }

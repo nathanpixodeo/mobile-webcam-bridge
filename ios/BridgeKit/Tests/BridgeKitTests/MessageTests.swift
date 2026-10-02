@@ -56,6 +56,14 @@ final class MessageTests: XCTestCase {
         XCTAssertThrowsError(try request.validate())
     }
 
+    func testStartVideoBitrateUpperBound() throws {
+        var request = StartVideoMessage(width: 3840, height: 2160, fps: 30, bitrateKbps: 40_000, camera: .backWide,
+                                        mirror: false, orientation: .auto, encoder: .lowLatency)
+        XCTAssertNoThrow(try request.validate())
+        request.bitrateKbps = 40_001
+        XCTAssertThrowsError(try request.validate())
+    }
+
     func testHostCommandDecoding() throws {
         let vectors = try PacketVectors.load()
         let start = try PacketStreamParser().parseAll(Data(hex: vectors.vector(named: "start-video").hex))[0]

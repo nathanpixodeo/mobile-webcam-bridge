@@ -80,3 +80,45 @@ class FramePacerTest {
         assertEquals(true, pacer.shouldEmit(5_033_333))
     }
 }
+
+class EncodeSizePlannerTest {
+    private fun plan(width: Int, height: Int, fps: Int, supports: (Int, Int, Int) -> Boolean) =
+        EncodeSizePlanner.plan(EncodeTarget(width, height, fps), supports = supports)
+
+    @Test
+    fun `keeps a supported request`() {
+        assertEquals(EncodeTarget(3840, 2160, 30), plan(3840, 2160, 30) { _, _, _ -> true })
+    }
+
+    @Test
+    fun `steps 4K down through the 16 9 sizes`() {
+        assertEquals(EncodeTarget(2560, 1440, 30), plan(3840, 2160, 30) { w, _, _ -> w <= 2560 })
+        assertEquals(EncodeTarget(1920, 1080, 30), plan(3840, 2160, 30) { w, _, _ -> w <= 1920 })
+        assertEquals(EncodeTarget(640, 360, 30), plan(3840, 2160, 30) { w, _, _ -> w <= 640 })
+    }
+
+    @Test
+    fun `lets the rate decide what fits`() {
+        // 4K only encodes up to 24 fps, 1440p up to 30.
+        val supports = { w: Int, _: Int, fps: Int -> if (w > 2560) fps <= 24 else fps <= 30 }
+        assertEquals(EncodeTarget(2560, 1440, 30), plan(3840, 2160, 30, supports))
+    }
+
+    @Test
+    fun `scales other aspect ratios by the same steps with aligned dimensions`() {
+        val target = EncodeSizePlanner.plan(EncodeTarget(1600, 1200, 30), widthAlignment = 16, heightAlignment = 8) { w, _, _ -> w <= 1000 }
+        assertEquals(EncodeTarget(800, 600, 30), target)
+        assertEquals(0, target.width % 16)
+        assertEquals(0, target.height % 8)
+    }
+
+    @Test
+    fun `keeps the size and lowers the rate when no size fits the requested rate`() {
+        assertEquals(EncodeTarget(1920, 1080, 24), plan(1920, 1080, 60) { _, _, fps -> fps <= 24 })
+    }
+
+    @Test
+    fun `returns the request unchanged when nothing is supported`() {
+        assertEquals(EncodeTarget(3840, 2160, 30), plan(3840, 2160, 30) { _, _, _ -> false })
+    }
+}

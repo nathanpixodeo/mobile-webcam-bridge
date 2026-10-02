@@ -170,6 +170,31 @@
       }
     },
     {
+      "name": "start-video-4k",
+      "hex": "4d57425210000000000000020000008900000000000013ec7b22626974726174654b627073223a32353030302c2263616d657261223a226261636b2e77696465222c22656e636f646572223a226c6f774c6174656e6379222c22667073223a33302c22686569676874223a323136302c226d6972726f72223a66616c73652c226f7269656e746174696f6e223a226175746f222c227769647468223a333834307d",
+      "header": {
+        "type": 16,
+        "flags": 0,
+        "seq": 2,
+        "payloadLength": 137,
+        "timestampUs": "5100"
+      },
+      "payload": {
+        "kind": "json",
+        "text": "{\"bitrateKbps\":25000,\"camera\":\"back.wide\",\"encoder\":\"lowLatency\",\"fps\":30,\"height\":2160,\"mirror\":false,\"orientation\":\"auto\",\"width\":3840}",
+        "value": {
+          "width": 3840,
+          "height": 2160,
+          "fps": 30,
+          "bitrateKbps": 25000,
+          "camera": "back.wide",
+          "mirror": false,
+          "orientation": "auto",
+          "encoder": "lowLatency"
+        }
+      }
+    },
+    {
       "name": "start-audio",
       "hex": "4d57425213000000000000000000001900000000000013897b2270726f63657373696e67223a227374616e64617264227d",
       "header": {

@@ -3,6 +3,7 @@ package dev.mobilewebcambridge.android.encoding
 import android.view.Surface
 import dev.mobilewebcambridge.protocol.media.EncodedVideoFrame
 import dev.mobilewebcambridge.protocol.messages.EncoderMode
+import dev.mobilewebcambridge.protocol.policy.EncodeTarget
 
 data class EncoderSettings(
     val width: Int,
@@ -37,7 +38,10 @@ interface VideoEncoder {
     fun release()
 }
 
-fun interface VideoEncoderFactory {
+interface VideoEncoderFactory {
+    /** [requested] when the encoder can produce it, else the closest size and rate it can (SPEC §3.3). */
+    fun fit(requested: EncodeTarget): EncodeTarget = requested
+
     /**
      * @param output receives every access unit, on the encoder's thread
      * @param failure receives a description when the encoder dies, on the encoder's thread

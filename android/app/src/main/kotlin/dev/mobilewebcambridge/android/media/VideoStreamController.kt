@@ -11,6 +11,7 @@ import dev.mobilewebcambridge.android.encoding.EncoderSettings
 import dev.mobilewebcambridge.android.encoding.VideoEncoder
 import dev.mobilewebcambridge.android.encoding.VideoEncoderFactory
 import dev.mobilewebcambridge.protocol.media.EncodedVideoFrame
+import dev.mobilewebcambridge.protocol.policy.EncodeTarget
 import dev.mobilewebcambridge.protocol.messages.ErrorCode
 import dev.mobilewebcambridge.protocol.messages.ErrorMessage
 import dev.mobilewebcambridge.protocol.messages.StartVideoMessage
@@ -98,7 +99,10 @@ class VideoStreamController(
         val source = if (useSynthetic) synthetic else camera
         val pipeline = generation
         try {
-            val format = source.prepare(VideoCaptureRequest.from(request))
+            val asked = VideoCaptureRequest.from(request)
+            val fitted = encoders.fit(EncodeTarget(asked.width, asked.height, asked.fps))
+            // The prepared format carries the size really encoded, which VideoConfig reports.
+            val format = source.prepare(asked.copy(width = fitted.width, height = fitted.height, fps = fitted.fps))
             val rate = policy.apply(throttle, fps = format.fps, bitrateKbps = request.bitrateKbps)
             val configId = ++lastConfigId
             val encoder = encoders.create(

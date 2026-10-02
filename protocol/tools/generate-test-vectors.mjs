@@ -154,6 +154,10 @@ addValid('start-video', { type: 0x10, seq: 1, timestampUs: 5_000n }, {
   kind: 'json',
   value: { width: 1280, height: 720, fps: 30, bitrateKbps: 6000, camera: 'back.wide', mirror: false, orientation: 'auto', encoder: 'lowLatency' },
 });
+addValid('start-video-4k', { type: 0x10, seq: 2, timestampUs: 5_100n }, {
+  kind: 'json',
+  value: { width: 3840, height: 2160, fps: 30, bitrateKbps: 25000, camera: 'back.wide', mirror: false, orientation: 'auto', encoder: 'lowLatency' },
+});
 addValid('start-audio', { type: 0x13, timestampUs: 5_001n }, { kind: 'json', value: { processing: 'standard' } });
 addValid('stop-video-max-seq', { type: 0x11, seq: 0xffffffff, timestampUs: 7n }, { kind: 'none' });
 addValid('request-keyframe', { type: 0x12, seq: 3 }, { kind: 'none' });

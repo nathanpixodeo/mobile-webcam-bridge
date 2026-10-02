@@ -51,6 +51,17 @@ final class FormatSelectorTests: XCTestCase {
         XCTAssertEqual(selector.select(from: formats, width: 960, height: 540, fps: 30)?.index, 2)
     }
 
+    func testPicksUHDFormatWhenAvailable() {
+        let withUHD = formats + [
+            CaptureFormatInfo(index: 6, width: 3840, height: 2160, minFrameRate: 1, maxFrameRate: 30, isVideoRange420: true),
+        ]
+        XCTAssertEqual(selector.select(from: withUHD, width: 3840, height: 2160, fps: 30)?.index, 6)
+    }
+
+    func testUHDRequestFallsBackToLargestWithoutUHDFormat() {
+        XCTAssertEqual(selector.select(from: formats, width: 3840, height: 2160, fps: 30)?.index, 5)
+    }
+
     func testFallsBackToLargestWhenNothingCovers() {
         XCTAssertEqual(selector.select(from: formats, width: 7680, height: 4320, fps: 30)?.index, 5)
     }

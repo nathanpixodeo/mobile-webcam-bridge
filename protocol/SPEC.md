@@ -111,6 +111,10 @@ protocol error and close the connection. There is no resynchronisation.
   2 per second.
 - `StartVideo` is idempotent: if video is already running with the same parameters it does
   nothing; if parameters differ the device reconfigures and sends a new `VideoConfig`.
+- While streaming, the host re-sends `StartVideo` with a different size, fps or bitrate whenever
+  the Windows application changes the camera mode.
+- A device that cannot produce the requested size encodes the closest size it can (same aspect
+  ratio preferred) and reports the actual size in `VideoConfig`; the host scales or letterboxes.
 
 ### 3.4 Audio rules
 
@@ -159,9 +163,9 @@ connection after sending.
 
 | Field         | Values                                                              |
 |---------------|---------------------------------------------------------------------|
-| `width`, `height` | output frame size in landscape terms (e.g. 1280×720, 1920×1080) |
+| `width`, `height` | output frame size in landscape terms (e.g. 1280×720, 1920×1080, 3840×2160). The host sends width 160–3840 and height 120–2160; devices accept either orientation up to 3840 on both axes |
 | `fps`         | 15–60                                                               |
-| `bitrateKbps` | 500–20 000                                                          |
+| `bitrateKbps` | 500–40 000                                                          |
 | `camera`      | `back.wide`, `back.ultraWide`, `back.telephoto`, `front`. A device without the requested lens falls back to `back.wide` and reports the camera actually used in `VideoConfig.camera` |
 | `mirror`      | boolean                                                             |
 | `orientation` | `auto` (follow device), `landscape`, `portrait`                     |

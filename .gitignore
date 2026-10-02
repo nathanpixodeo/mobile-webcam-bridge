@@ -49,3 +49,6 @@ android/.kotlin/
 Thumbs.db
 .idea/
 *.swp
+
+# Kotlin language server / Eclipse build output
+android/**/bin/

@@ -76,6 +76,19 @@ class MessagesTest {
     }
 
     @Test
+    fun `accepts bitrates up to 40000 and rejects above`() {
+        fun decode(bitrate: Int) = HostCommandDecoder.decode(
+            Packet.of(
+                PacketType.START_VIDEO, seq = 0, timestampUs = 0,
+                payload = """{"bitrateKbps":$bitrate,"camera":"back.wide","encoder":"lowLatency","fps":30,"height":2160,"mirror":false,"orientation":"auto","width":3840}""".toByteArray(),
+            ),
+        )
+        assertEquals(40_000, (decode(40_000) as HostCommand.StartVideo).message.bitrateKbps)
+        val error = assertThrows(MessageDecodingException::class.java) { decode(40_001) }
+        assertEquals(MessageDecodingException.Kind.INVALID_VALUE, error.kind)
+    }
+
+    @Test
     fun `truncates long log messages on a code point boundary`() {
         val message = LogMessage(LogLevel.INFO, "test", "é".repeat(5_000))
         val truncated = message.truncated(maxMessageBytes = 101)
