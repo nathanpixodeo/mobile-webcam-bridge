@@ -5,7 +5,8 @@
 // Downscaling by 2× or more first halves the image with a 2×2 box filter (repeatedly), then a
 // bilinear pass covers the remaining ratio; bilinear alone would alias badly at 4K → 360p.
 // Upscaling is bilinear. The bilinear pass is separable (horizontal pass per source row, cached,
-// then a vertical blend), fixed point; one instance per source/destination size pair.
+// then a vertical blend), fixed point; above 1080p the chroma plane runs on a pool thread. One
+// instance per source/destination size pair.
 #pragma once
 
 #include <cstddef>
@@ -65,7 +66,9 @@ private:
     std::vector<Tap> lumaY_;
     std::vector<Tap> chromaX_;
     std::vector<Tap> chromaY_;
-    std::vector<std::uint16_t> rows_[2];    // horizontally scaled source rows of the bilinear pass
+    // Horizontally scaled source rows of the bilinear pass, per plane (the planes may run in parallel).
+    std::vector<std::uint16_t> lumaRows_[2];
+    std::vector<std::uint16_t> chromaRows_[2];
 };
 
 }  // namespace mwb::um::color

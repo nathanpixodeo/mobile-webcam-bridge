@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <future>
 
 #include <emmintrin.h>
 
@@ -12,6 +13,7 @@ namespace {
 constexpr std::uint8_t kBlackLuma = 16;
 constexpr std::uint8_t kNeutralChroma = 128;
 constexpr std::uint32_t kWeightOne = 256;
+constexpr std::uint64_t kParallelPixels = 1920ull * 1080ull;
 
 // One plane of an NV12 image: `channels` interleaved bytes per pixel (1 for Y, 2 for UV).
 struct ConstPlane {
@@ -240,8 +242,18 @@ void Nv12Scaler::Scale(const Nv12Image& src, std::uint8_t* dst) {
         CopyPlane(chromaIn, content_.width, chromaOut);
         return;
     }
-    BilinearPlane<1>(lumaIn, lumaOut, lumaX_, lumaY_, rows_);
-    BilinearPlane<2>(chromaIn, chromaOut, chromaX_, chromaY_, rows_);
+    // Above 1080p the chroma plane (a third of the work) runs on a pool thread meanwhile: upscaling
+    // to 4K is the hub's most expensive case.
+    if (std::uint64_t{content_.width} * content_.height > kParallelPixels) {
+        std::future<void> chroma = std::async(std::launch::async, [&] {
+            BilinearPlane<2>(chromaIn, chromaOut, chromaX_, chromaY_, chromaRows_);
+        });
+        BilinearPlane<1>(lumaIn, lumaOut, lumaX_, lumaY_, lumaRows_);
+        chroma.get();
+        return;
+    }
+    BilinearPlane<1>(lumaIn, lumaOut, lumaX_, lumaY_, lumaRows_);
+    BilinearPlane<2>(chromaIn, chromaOut, chromaX_, chromaY_, chromaRows_);
 }
 
 }  // namespace mwb::um::color
