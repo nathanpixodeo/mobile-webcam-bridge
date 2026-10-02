@@ -80,6 +80,7 @@ describe(
     });
 
     it('decodes at the new size after a mode switch', async () => {
+      const switched = splitAccessUnits(h264Fixture({ width: 640, height: 360, fps: 30, seconds: 1 }));
       await using output = await FakeVideoOutput.start(MODE);
       const keyframeRequests = { count: 0 };
       await using pipeline = createPipeline(output, keyframeRequests);
@@ -91,10 +92,12 @@ describe(
       pipeline.setMode({ width: 640, height: 360, fpsNum: 30, fpsDen: 1 });
       await waitFor(() => keyframeRequests.count >= 2, 'decoder restarted for the new size', 15_000);
       assert.deepEqual(output.ingestMode, { width: 640, height: 360 });
-      // Resume at the second IDR, as the phone does after a keyframe request.
-      await feed(pipeline, accessUnits.slice(30), 10);
-      // Like the first stage (8 of 10): allow for frames still inside ffmpeg when the input stops.
-      await waitFor(() => output.frames >= accessUnits.length - 32, 'frames at the new size', 30_000);
+      // The phone confirms the size and streams it from an IDR.
+      pipeline.onConfigurationChanged({ width: 640, height: 360 });
+      await feed(pipeline, switched, 10);
+      // The stream already has the output size, so ffmpeg does not resize and holds back only
+      // the last frame (resizing would hold back one more).
+      await waitFor(() => output.frames >= switched.length - 1, 'frames at the new size', 30_000);
       assert.equal(output.writerConnections, 2);
     });
 

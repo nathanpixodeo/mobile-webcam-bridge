@@ -148,11 +148,12 @@ defaults to the whole catalog.
 ```
 
 - `loadPlaceholder`: reads the file (must be exactly `width × height × 3 / 2` bytes; even
-  `width`/`height` up to 3840 × 2160) and stores it under `kind`. The hub scales it to each
+  `width`/`height`, at most 3840 on either side and 3840 × 2160 pixels) and stores it under `kind`. The hub scales it to each
   consumer's size. Kinds: `no-device`, `app-closed`, `paused`, `background`, `stopped`.
-- `ingest`: sets the size of the raw frames on the ingest pipe; must be a catalog size within the
-  cap. The hub drops the current ingest writer and any partial frame, then answers with the
-  `ingestMode` event. Node stops the decoder first and starts the next one after `ingestMode`.
+- `ingest`: sets the size of the raw frames on the ingest pipe — the size the phone encodes, which
+  need not be a catalog size or within the cap (the cap only limits consumers); same limits as
+  `loadPlaceholder`. The hub drops the current ingest writer and any partial frame, then answers
+  with the `ingestMode` event. Node stops the decoder first and starts the next one after `ingestMode`.
 - `placeholder` with a kind: show that placeholder until told otherwise.
 - `placeholder` with `null`: show live ingest frames; if no ingest frame arrives for 300 ms, show
   the `stopped` placeholder (or a built-in neutral frame if none is loaded).

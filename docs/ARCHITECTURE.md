@@ -119,13 +119,16 @@ Node moves only compressed video (a few Mbit/s) and 96 KB/s of PCM.
   mode on the hub's pipe; the hub reports the consumers' modes to Node.
 - `ModeArbiter` streams the largest requested size at the highest requested frame rate: it
   upgrades immediately and downgrades only after `video.modeDowngradeGraceMs` (3 s). A change
-  re-sends `StartVideo` to the phone, restarts ffmpeg for the new output size and switches the
-  hub's ingest size (`ingest` → `ingestMode`). Meanwhile the hub keeps serving every consumer by
+  re-sends `StartVideo` to the phone, restarts ffmpeg for the new size and switches the hub's
+  ingest size (`ingest` → `ingestMode`). Meanwhile the hub keeps serving every consumer by
   scaling the previous frames, so a switch shows no black frames.
+- ffmpeg outputs the size the phone actually encodes (`VideoConfig`: portrait, or a size the phone
+  fell back to), and the hub scales it for each consumer. ffmpeg only resizes while a switch is in
+  flight, because resizing inside ffmpeg holds back one more frame (measured with ffmpeg 8.1).
 - The bitrate follows the mode: `W × H × fps × video.bitsPerPixel` (0.1), clamped to
   1.5–40 Mbps (about 6 Mbps at 1080p30, 25 Mbps at 4K30), unless `video.bitrateKbps` overrides it.
 - ffmpeg decodes with `-flags low_delay`, a tiny probe, `-fps_mode passthrough`, and scales/pads
-  into the streamed mode. Above 1080p it decodes with `d3d11va` (`video.hwaccel: auto`) and falls
+  into the decode size (a no-op once the phone confirmed it). Above 1080p it decodes with `d3d11va` (`video.hwaccel: auto`) and falls
   back to software if that fails. After each access unit the host writes an access unit delimiter
   so ffmpeg's parser emits the frame immediately (measured: ~47 ms decode latency at 30 fps
   instead of ~94 ms). `-fflags nobuffer` must not be used: it drops frames with raw H.264.

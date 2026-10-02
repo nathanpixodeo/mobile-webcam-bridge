@@ -42,3 +42,27 @@ export function isCatalogMode(mode: VideoMode): boolean {
     maxFps !== undefined && mode.fpsDen === 1 && CATALOG_FRAME_RATES.includes(mode.fpsNum) && mode.fpsNum <= maxFps
   );
 }
+
+/** Largest side and pixel count of a frame on the hub's ingest pipe (a 4K frame, either way up). */
+const MAX_INGEST_SIDE = 3840;
+const MAX_INGEST_PIXELS = 3840 * 2160;
+
+/**
+ * True for a size the hub accepts on its ingest pipe: even sides (NV12), at most 3840 on either
+ * side and 3840x2160 pixels. Not limited to the catalog, so the decoder can keep the size the
+ * phone encodes (portrait, or a size it fell back to) and leave the scaling to the hub.
+ */
+export function isIngestSize(size: VideoSize): boolean {
+  const { width, height } = size;
+  return (
+    Number.isInteger(width) &&
+    Number.isInteger(height) &&
+    width >= 2 &&
+    height >= 2 &&
+    width % 2 === 0 &&
+    height % 2 === 0 &&
+    width <= MAX_INGEST_SIDE &&
+    height <= MAX_INGEST_SIDE &&
+    width * height <= MAX_INGEST_PIXELS
+  );
+}

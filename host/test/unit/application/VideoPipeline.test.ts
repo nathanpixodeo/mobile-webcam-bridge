@@ -162,7 +162,7 @@ describe('VideoPipeline', () => {
     await flushMicrotasks();
     pipeline.onAccessUnit(unit(true), 0);
     assert.deepEqual(output.ingestRequests, [], 'the default mode is already the ingest size');
-    assert.equal(factory.created[0]?.mode, DEFAULT_MODE);
+    assert.deepEqual(factory.created[0]?.mode, DEFAULT_MODE);
 
     pipeline.setMode(HD);
     await flushMicrotasks();
@@ -170,7 +170,7 @@ describe('VideoPipeline', () => {
     assert.deepEqual(output.ingestRequests, [{ width: 1280, height: 720 }]);
     assert.equal(factory.created.length, 2);
     const decoder = factory.created[1]!;
-    assert.equal(decoder.mode, HD);
+    assert.deepEqual(decoder.mode, HD);
     assert.deepEqual(decoder.ingestMode, { width: 1280, height: 720 }, 'decoder starts after the ack');
     assert.equal(keyframes.count, 2, 'a keyframe is requested for the new decoder');
     pipeline.onAccessUnit(unit(false), 1);
@@ -180,6 +180,47 @@ describe('VideoPipeline', () => {
       [true],
       'the new decoder starts at an IDR',
     );
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('decodes at the size the phone encodes, so ffmpeg does not resize', async () => {
+    const { pipeline, factory, output } = await setup();
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    pipeline.setMode({ width: 2560, height: 1440, fpsNum: 30, fpsDen: 1 });
+    await flushMicrotasks();
+    assert.deepEqual(factory.created[1]?.mode, { width: 2560, height: 1440, fpsNum: 30, fpsDen: 1 });
+
+    // The phone has no 1440p format and encodes 4K instead.
+    pipeline.onConfigurationChanged({ width: 3840, height: 2160 });
+    await flushMicrotasks();
+    assert.equal(factory.created[1].disposed, true);
+    assert.deepEqual(factory.created[2]?.mode, { width: 3840, height: 2160, fpsNum: 30, fpsDen: 1 });
+    assert.deepEqual(output.ingestMode, { width: 3840, height: 2160 });
+
+    // A frame rate change keeps the confirmed size; a portrait stream is ingested as it is.
+    pipeline.setMode({ width: 2560, height: 1440, fpsNum: 60, fpsDen: 1 });
+    await flushMicrotasks();
+    assert.equal(factory.created.length, 3);
+    pipeline.onConfigurationChanged({ width: 1080, height: 1920 });
+    await flushMicrotasks();
+    assert.deepEqual(output.ingestMode, { width: 1080, height: 1920 });
+    assert.equal(factory.created.length, 4);
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('keeps the requested size when the encoded size cannot be ingested', async () => {
+    const { pipeline, factory, output } = await setup();
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    pipeline.onConfigurationChanged({ width: 640, height: 360 });
+    pipeline.onConfigurationChanged({ width: 7680, height: 4320 });
+    pipeline.onConfigurationChanged({ width: 641, height: 360 });
+    await flushMicrotasks();
+    assert.equal(factory.created.length, 1, 'ffmpeg letterboxes into the requested size instead');
+    assert.deepEqual(output.ingestRequests, []);
     await pipeline[Symbol.asyncDispose]();
   });
 
@@ -207,7 +248,7 @@ describe('VideoPipeline', () => {
     assert.deepEqual(output.ingestRequests, [{ width: 1280, height: 720 }]);
     assert.equal(factory.created.length, 1);
     const decoder = factory.created[0]!;
-    assert.equal(decoder.mode, HD);
+    assert.deepEqual(decoder.mode, HD);
     assert.deepEqual(decoder.ingestMode, { width: 1280, height: 720 });
     await pipeline[Symbol.asyncDispose]();
   });

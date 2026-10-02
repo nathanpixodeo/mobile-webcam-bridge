@@ -118,10 +118,12 @@ describe(
       await waitFor(() => hub.consumers.count === 0, 'consumers gone', 10_000);
     });
 
-    it('rejects an ingest size outside the cap', async () => {
+    it('ingests the size the phone encodes, even outside the catalog and the cap', async () => {
       await using hub = await startHub(testPipeName());
-      await assert.rejects(hub.setIngestMode({ width: 3840, height: 2160 }, AbortSignal.timeout(5000)));
-      assert.deepEqual(hub.ingestMode, { width: 1280, height: 720 });
+      await hub.setIngestMode({ width: 1080, height: 1920 }, AbortSignal.timeout(5000));
+      assert.deepEqual(hub.ingestMode, { width: 1080, height: 1920 }, 'portrait, taller than the 1080 cap');
+      await assert.rejects(hub.setIngestMode({ width: 7680, height: 4320 }, AbortSignal.timeout(5000)));
+      assert.deepEqual(hub.ingestMode, { width: 1080, height: 1920 });
     });
 
     it(

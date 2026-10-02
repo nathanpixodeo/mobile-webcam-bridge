@@ -137,12 +137,7 @@ void VideoHub::Apply(const ShowPlaceholderCommand& command) {
 }
 
 void VideoHub::Apply(const SetIngestSizeCommand& command) {
-    const mwb::frame::ModeCap& cap = settings_.cap;
-    if (!mwb::frame::IsCatalogSize(command.width, command.height) || command.width > cap.maxWidth ||
-        command.height > cap.maxHeight) {
-        throw CommandError(ErrorCode::Usage, "ingest size " + std::to_string(command.width) + "x" +
-                                                 std::to_string(command.height) + " is not an advertised camera size");
-    }
+    // The parser validated the size (frame::IsIngestSize); the cap only limits consumers.
     const mwb::frame::FrameSize size{command.width, command.height};
     if (!ingest_->SetFrameSize(size, kIngestResizeTimeoutMs)) {
         throw CommandError(ErrorCode::IoError, "Timed out switching the ingest size");

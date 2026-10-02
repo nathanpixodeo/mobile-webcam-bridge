@@ -48,27 +48,56 @@ void HalvePlane(const ConstPlane& src, const MutablePlane& dst) noexcept {
     }
 }
 
+// Horizontal pass over one source row; results keep 8 fractional bits (0..65280 fits 16 bits).
+template <std::uint32_t Channels, typename Tap>
+void HorizontalRow(const std::uint8_t* source, const std::vector<Tap>& tapsX, std::uint16_t* out) noexcept {
+    for (std::size_t x = 0; x < tapsX.size(); ++x) {
+        const Tap& tap = tapsX[x];
+        const std::uint32_t weight = tap.weight;
+        const std::uint32_t first = tap.first * Channels;
+        const std::uint32_t second = tap.second * Channels;
+        for (std::uint32_t c = 0; c < Channels; ++c) {
+            out[x * Channels + c] =
+                static_cast<std::uint16_t>(source[first + c] * (kWeightOne - weight) + source[second + c] * weight);
+        }
+    }
+}
+
+// Vertical blend of two horizontally scaled rows; a plain loop the compiler vectorises.
+void VerticalRow(const std::uint16_t* top, const std::uint16_t* bottom, std::uint32_t weight, std::uint8_t* out,
+                 std::size_t count) noexcept {
+    const std::uint32_t topWeight = kWeightOne - weight;
+    for (std::size_t i = 0; i < count; ++i) {
+        out[i] = static_cast<std::uint8_t>((top[i] * topWeight + bottom[i] * weight + 32768u) >> 16);
+    }
+}
+
+// Separable bilinear: each source row is scaled horizontally once and kept while the destination
+// rows that need it are blended (upscaling reuses every row for several destination rows).
 template <std::uint32_t Channels, typename Tap>
 void BilinearPlane(const ConstPlane& src, const MutablePlane& dst, const std::vector<Tap>& tapsX,
-                   const std::vector<Tap>& tapsY) noexcept {
+                   const std::vector<Tap>& tapsY, std::vector<std::uint16_t> (&rows)[2]) {
+    const std::size_t count = tapsX.size() * Channels;
+    rows[0].resize(count);
+    rows[1].resize(count);
+    std::int64_t cached[2] = {-1, -1};  // source row held by each buffer
+
+    // The buffer holding source row `index`, filling the one that is not `keep` when needed.
+    const auto rowFor = [&](std::uint32_t index, int keep) -> int {
+        for (int slot = 0; slot < 2; ++slot) {
+            if (cached[slot] == index) return slot;
+        }
+        const int slot = keep == 0 ? 1 : 0;
+        HorizontalRow<Channels>(src.data + index * src.stride, tapsX, rows[slot].data());
+        cached[slot] = index;
+        return slot;
+    };
+
     for (std::size_t row = 0; row < tapsY.size(); ++row) {
         const Tap& ty = tapsY[row];
-        const std::uint8_t* a = src.data + ty.first * src.stride;
-        const std::uint8_t* b = src.data + ty.second * src.stride;
-        const std::uint32_t wy = ty.weight;
-        std::uint8_t* out = dst.data + row * dst.stride;
-        for (std::size_t x = 0; x < tapsX.size(); ++x) {
-            const Tap& tx = tapsX[x];
-            const std::uint32_t wx = tx.weight;
-            const std::uint32_t first = tx.first * Channels;
-            const std::uint32_t second = tx.second * Channels;
-            for (std::uint32_t c = 0; c < Channels; ++c) {
-                const std::uint32_t top = a[first + c] * (kWeightOne - wx) + a[second + c] * wx;
-                const std::uint32_t bottom = b[first + c] * (kWeightOne - wx) + b[second + c] * wx;
-                out[x * Channels + c] =
-                    static_cast<std::uint8_t>((top * (kWeightOne - wy) + bottom * wy + 32768u) >> 16);
-            }
-        }
+        const int top = rowFor(ty.first, -1);
+        const int bottom = ty.weight == 0 ? top : rowFor(ty.second, top);
+        VerticalRow(rows[top].data(), rows[bottom].data(), ty.weight, dst.data + row * dst.stride, count);
     }
 }
 
@@ -180,8 +209,8 @@ void Nv12Scaler::Scale(const Nv12Image& src, std::uint8_t* dst) {
         CopyPlane(chromaIn, content_.width, chromaOut);
         return;
     }
-    BilinearPlane<1>(lumaIn, lumaOut, lumaX_, lumaY_);
-    BilinearPlane<2>(chromaIn, chromaOut, chromaX_, chromaY_);
+    BilinearPlane<1>(lumaIn, lumaOut, lumaX_, lumaY_, rows_);
+    BilinearPlane<2>(chromaIn, chromaOut, chromaX_, chromaY_, rows_);
 }
 
 }  // namespace mwb::um::color

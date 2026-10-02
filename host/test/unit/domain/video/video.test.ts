@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { bitrateKbpsFor } from '#domain/video/BitratePolicy.ts';
 import { ModeArbiter } from '#domain/video/ModeArbiter.ts';
-import { CATALOG_FRAME_RATES, CATALOG_SIZES, isCatalogMode, maxFpsFor } from '#domain/video/ModeCatalog.ts';
+import {
+  CATALOG_FRAME_RATES,
+  CATALOG_SIZES,
+  isCatalogMode,
+  isIngestSize,
+  maxFpsFor,
+} from '#domain/video/ModeCatalog.ts';
 import { compareModes, sameMode, type VideoMode } from '#domain/video/VideoMode.ts';
 import { FakeClock } from '#test/fakes/FakeClock.ts';
 
@@ -32,6 +38,17 @@ describe('ModeCatalog', () => {
     assert.ok(!isCatalogMode(mode(1280, 720, 25)), 'not a catalog frame rate');
     assert.ok(!isCatalogMode(mode(320, 240, 30)), 'not a catalog size');
     assert.ok(!isCatalogMode({ width: 1280, height: 720, fpsNum: 30_000, fpsDen: 1001 }), 'integer rates only');
+  });
+
+  it('accepts any even ingest size up to 4K either way up', () => {
+    assert.ok(isIngestSize({ width: 3840, height: 2160 }));
+    assert.ok(isIngestSize({ width: 2160, height: 3840 }), 'portrait 4K');
+    assert.ok(isIngestSize({ width: 1080, height: 1920 }));
+    assert.ok(isIngestSize({ width: 1440, height: 1080 }), 'not a catalog size');
+    assert.ok(!isIngestSize({ width: 3840, height: 3840 }), 'more pixels than 4K');
+    assert.ok(!isIngestSize({ width: 7680, height: 4320 }));
+    assert.ok(!isIngestSize({ width: 1281, height: 720 }), 'odd width');
+    assert.ok(!isIngestSize({ width: 0, height: 0 }));
   });
 });
 

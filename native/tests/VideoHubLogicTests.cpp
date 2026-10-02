@@ -134,7 +134,7 @@ TEST_SUITE("HubCommand") {
         CHECK(command.height == 1080);
     }
 
-    TEST_CASE("ingest carries an even frame size within the protocol maximum") {
+    TEST_CASE("ingest carries any even frame size up to 4K either way up") {
         const HubCommand ingest = ParseHubCommand(R"({"cmd":"ingest","width":3840,"height":2160})");
         REQUIRE(std::holds_alternative<SetIngestSizeCommand>(ingest));
         CHECK(std::get<SetIngestSizeCommand>(ingest).width == 3840);
@@ -146,6 +146,12 @@ TEST_SUITE("HubCommand") {
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":640.5,"height":360})"), HubCommandError);
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":7680,"height":4320})"), HubCommandError);
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":0,"height":0})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":3840,"height":3840})"), HubCommandError);
+
+        const HubCommand portrait = ParseHubCommand(R"({"cmd":"ingest","width":2160,"height":3840})");
+        REQUIRE(std::holds_alternative<SetIngestSizeCommand>(portrait));
+        CHECK(std::get<SetIngestSizeCommand>(portrait).height == 3840);
+        CHECK(std::holds_alternative<SetIngestSizeCommand>(ParseHubCommand(R"({"cmd":"ingest","width":1440,"height":1080})")));
     }
 
     TEST_CASE("malformed commands are rejected") {

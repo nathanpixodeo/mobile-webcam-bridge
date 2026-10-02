@@ -1,6 +1,7 @@
 #include "video/HubCommand.h"
 
 #include <cmath>
+#include <utility>
 
 #include <mwb/FrameProtocol.h>
 
@@ -19,16 +20,24 @@ PlaceholderKind RequireKind(const JsonValue& value) {
     return *kind;
 }
 
-// An even integer in [2, max]: NV12 needs even dimensions.
-std::uint32_t RequireDimension(const JsonValue& document, std::string_view key, std::uint32_t max) {
+std::uint32_t RequireInteger(const JsonValue& document, std::string_view key) {
     const JsonValue* value = document.Find(key);
     const double* number = value != nullptr ? value->AsNumber() : nullptr;
     const std::string name(key);
-    if (number == nullptr) throw HubCommandError("\"" + name + "\" must be a number");
-    if (*number < 2 || *number > max || std::floor(*number) != *number || static_cast<std::uint32_t>(*number) % 2 != 0) {
-        throw HubCommandError("\"" + name + "\" must be an even integer from 2 to " + std::to_string(max));
+    if (number == nullptr || *number < 0 || *number > 65536 || std::floor(*number) != *number) {
+        throw HubCommandError("\"" + name + "\" must be a non-negative integer");
     }
     return static_cast<std::uint32_t>(*number);
+}
+
+// A frame size the hub can hold: see frame::IsIngestSize.
+std::pair<std::uint32_t, std::uint32_t> RequireFrameSize(const JsonValue& document) {
+    const std::uint32_t width = RequireInteger(document, "width");
+    const std::uint32_t height = RequireInteger(document, "height");
+    if (!mwb::frame::IsIngestSize(width, height)) {
+        throw HubCommandError("\"width\" and \"height\" must be even, at most 3840 each and 3840x2160 pixels");
+    }
+    return {width, height};
 }
 
 }  // namespace
@@ -57,13 +66,12 @@ HubCommand ParseHubCommand(std::string_view line) {
         const JsonValue* path = document.Find("path");
         const std::string* pathText = path != nullptr ? path->AsString() : nullptr;
         if (pathText == nullptr || pathText->empty()) throw HubCommandError("\"loadPlaceholder\" needs a non-empty \"path\"");
-        return LoadPlaceholderCommand{RequireKind(*kind), ToWide(*pathText),
-                                      RequireDimension(document, "width", mwb::frame::kMaxWidth),
-                                      RequireDimension(document, "height", mwb::frame::kMaxHeight)};
+        const auto [width, height] = RequireFrameSize(document);
+        return LoadPlaceholderCommand{RequireKind(*kind), ToWide(*pathText), width, height};
     }
     if (*name == "ingest") {
-        return SetIngestSizeCommand{RequireDimension(document, "width", mwb::frame::kMaxWidth),
-                                    RequireDimension(document, "height", mwb::frame::kMaxHeight)};
+        const auto [width, height] = RequireFrameSize(document);
+        return SetIngestSizeCommand{width, height};
     }
     throw HubCommandError("unknown command \"" + *name + "\"");
 }

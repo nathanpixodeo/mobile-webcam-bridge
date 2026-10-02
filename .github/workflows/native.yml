@@ -1,5 +1,6 @@
 # Native components: bridge-native.exe, the camera DLLs and the native unit tests (job "build"), and
-# the virtual microphone driver (job "driver"). Runs on changes to native/ or protocol/, or manually.
+# the virtual microphone driver (job "driver"). Runs on changes to native/, protocol/ or the host's
+# hub adapter and its contract tests, or manually.
 name: native
 
 on:
@@ -9,12 +10,16 @@ on:
       - native/**
       - protocol/**
       - scripts/build-native.ps1
+      - host/src/infrastructure/native/**
+      - host/test/integration/hub.integration.test.ts
       - .github/workflows/native.yml
   pull_request:
     paths:
       - native/**
       - protocol/**
       - scripts/build-native.ps1
+      - host/src/infrastructure/native/**
+      - host/test/integration/hub.integration.test.ts
       - .github/workflows/native.yml
   workflow_dispatch:
 
@@ -45,6 +50,24 @@ jobs:
           name: native-stage
           path: native/out/Release/stage
           if-no-files-found: error
+
+      # The host's contract tests against the bridge-native.exe just built (the host workflow has
+      # no native build, so it skips them): subscriptions, per-consumer scaling, ingest sizes.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: host/package-lock.json
+
+      - name: Install ffmpeg (placeholder rendering)
+        run: choco install ffmpeg --no-progress -y
+        shell: pwsh
+
+      - name: Hub contract tests
+        working-directory: host
+        run: |
+          npm ci
+          node --test test/integration/hub.integration.test.ts
 
   driver:
     name: Virtual microphone driver

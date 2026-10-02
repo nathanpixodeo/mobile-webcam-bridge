@@ -106,6 +106,14 @@ inline constexpr std::size_t kMaxCatalogModes = kCatalogSizes.size() * kCatalogF
     return fpsOk && mode.fpsNum <= MaxCatalogFps(mode.width, mode.height);
 }
 
+// Frames on the ingest pipe (and placeholders) keep the size the phone encodes, which need not be
+// a catalog size (portrait, or a size the phone fell back to): even sides, at most 3840 on either
+// side and no more pixels than 3840x2160. Consumers get them scaled to their subscribed mode.
+[[nodiscard]] constexpr bool IsIngestSize(std::uint32_t width, std::uint32_t height) noexcept {
+    return width >= 2 && height >= 2 && width % 2 == 0 && height % 2 == 0 && width <= kMaxWidth &&
+           height <= kMaxWidth && std::uint64_t{width} * height <= std::uint64_t{kMaxWidth} * kMaxHeight;
+}
+
 // Installed limit on the advertised modes (registry MaxWidth, MaxHeight, MaxFps).
 struct ModeCap {
     std::uint32_t maxWidth;

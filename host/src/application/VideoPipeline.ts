@@ -1,8 +1,9 @@
 import type { Clock } from '#domain/clock.ts';
 import { toError, type MediaError } from '#domain/errors.ts';
 import { KeyframeGate } from '#domain/h264/KeyframeGate.ts';
+import { isIngestSize } from '#domain/video/ModeCatalog.ts';
 import { selectPlaceholder, type PlaceholderInputs } from '#domain/video/PlaceholderPolicy.ts';
-import { describeMode, sameMode, sameSize, type VideoMode } from '#domain/video/VideoMode.ts';
+import { describeMode, sameMode, sameSize, type VideoMode, type VideoSize } from '#domain/video/VideoMode.ts';
 import type { Logger } from '#ports/Logger.ts';
 import type { Metrics } from '#ports/Metrics.ts';
 import type { EncodedAccessUnit, VideoDecoder, VideoDecoderFactory, VideoOutput } from '#ports/Video.ts';
@@ -29,8 +30,13 @@ interface RunningDecoder {
 
 /**
  * Access units → decoder → virtual camera. Owns the decoder lifecycle: started while the
- * camera has consumers, restarted for every new streamed size, restarted (rate-limited) when it
+ * camera has consumers, restarted for every new decoded size, restarted (rate-limited) when it
  * crashes, and gated so it only ever starts decoding at an IDR.
+ *
+ * The decoder outputs the size the phone encodes (`VideoConfig`), so ffmpeg only resizes while a
+ * switch is in flight: resizing inside ffmpeg holds back one more frame (measured with ffmpeg
+ * 8.1), and the hub scales for every consumer anyway. Until the phone confirms, the requested
+ * mode's size is assumed, which is what the phone normally sends.
  */
 export class VideoPipeline implements AsyncDisposable {
   readonly #options: VideoPipelineOptions;
@@ -40,6 +46,8 @@ export class VideoPipeline implements AsyncDisposable {
   #running: RunningDecoder | undefined;
   #active = false;
   #mode: VideoMode;
+  /** What the decoder outputs: the phone's encoded size, else the requested mode's size. */
+  #decodeSize: VideoSize;
   #lastKeyframeRequestMs = Number.NEGATIVE_INFINITY;
   #lastSeq: number | undefined;
   /** Serialises decoder start/stop so overlapping demand and mode changes cannot race. */
@@ -48,6 +56,7 @@ export class VideoPipeline implements AsyncDisposable {
   constructor(options: VideoPipelineOptions) {
     this.#options = options;
     this.#mode = options.initialMode;
+    this.#decodeSize = sizeOf(options.initialMode);
   }
 
   get isActive(): boolean {
@@ -61,9 +70,11 @@ export class VideoPipeline implements AsyncDisposable {
     this.#enqueue(() => this.#reconcile());
   }
 
-  /** Decodes to `mode`'s size from now on (driven by the streamed camera mode). */
+  /** The streamed camera mode changed; the phone is asked for it and normally sends its size. */
   setMode(mode: VideoMode): void {
     if (sameMode(mode, this.#mode)) return;
+    // A frame rate change keeps the encoded size the phone confirmed.
+    if (!sameSize(mode, this.#mode)) this.#decodeSize = sizeOf(mode);
     this.#mode = mode;
     this.#enqueue(() => this.#reconcile());
   }
@@ -91,9 +102,16 @@ export class VideoPipeline implements AsyncDisposable {
     }
   }
 
-  /** A new encoder configuration starts with an IDR; nothing to do but log it. */
-  onConfigurationChanged(): void {
+  /**
+   * A new encoder configuration (it starts with an IDR). The decoder follows the encoded size; a
+   * size the hub cannot ingest keeps the requested mode's size and lets ffmpeg letterbox.
+   */
+  onConfigurationChanged(encoded: VideoSize): void {
     this.#lastSeq = undefined;
+    const size = isIngestSize(encoded) ? sizeOf(encoded) : sizeOf(this.#mode);
+    if (sameSize(size, this.#decodeSize)) return;
+    this.#decodeSize = size;
+    this.#enqueue(() => this.#reconcile());
   }
 
   /** Recomputes which placeholder (if any) the camera shows. */
@@ -126,16 +144,17 @@ export class VideoPipeline implements AsyncDisposable {
       await this.#stopDecoder();
       return;
     }
-    if (this.#running !== undefined && sameSize(this.#running.mode, this.#mode)) return;
+    if (this.#running !== undefined && sameSize(this.#running.mode, this.#decodeSize)) return;
     await this.#stopDecoder();
-    // The hub must expect the new frame size before a decoder writes it; the mode may move again
+    // The hub must expect the new frame size before a decoder writes it; the size may move again
     // during the round trip, and only the latest one gets a decoder.
-    let mode = this.#mode;
-    while (this.#wantsDecoder() && !sameSize(output.ingestMode, mode)) {
-      await output.setIngestMode(mode, signal);
-      mode = this.#mode;
+    let size = this.#decodeSize;
+    while (this.#wantsDecoder() && !sameSize(output.ingestMode, size)) {
+      await output.setIngestMode(size, signal);
+      size = this.#decodeSize;
     }
     if (!this.#wantsDecoder()) return;
+    const mode: VideoMode = { ...size, fpsNum: this.#mode.fpsNum, fpsDen: this.#mode.fpsDen };
     const decoder = await decoders.create(output, mode, signal);
     this.#running = {
       decoder,
@@ -187,4 +206,8 @@ export class VideoPipeline implements AsyncDisposable {
     this.#options.metrics.increment('video.keyframeRequests');
     this.#options.requestKeyframe();
   }
+}
+
+function sizeOf(size: VideoSize): VideoSize {
+  return { width: size.width, height: size.height };
 }

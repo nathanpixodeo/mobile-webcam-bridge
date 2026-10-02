@@ -195,7 +195,7 @@ export class BridgeService implements AsyncDisposable {
           encoder: config.encoder,
           camera: config.camera,
         });
-        videoPipeline.onConfigurationChanged();
+        videoPipeline.onConfigurationChanged(config);
       }),
     );
     subscriptions.use(

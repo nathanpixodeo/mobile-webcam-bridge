@@ -46,6 +46,10 @@ The virtual camera advertises a fixed catalog of modes, filtered by the installe
   for the current **ingest size**. Rows are tightly packed (stride = width).
 - The ingest size starts as the installed default mode and changes with the hub's `ingest` command
   (protocol/BRIDGE_NATIVE.md §3). The command drops the current writer and any partial frame.
+- Node sets the ingest size to the size the phone encodes, so ffmpeg does not resize (resizing
+  inside ffmpeg holds back one more frame). It need not be a catalog size — portrait, or a size the
+  phone fell back to — but must have even sides, at most 3840 on either side and no more pixels
+  than 3840 × 2160.
 - One writer at a time. When the writer disconnects, the hub discards any partial frame and
   waits for the next writer (ffmpeg is restarted on every decoder restart).
 

@@ -120,6 +120,18 @@ TEST_SUITE("FrameProtocol") {
         CHECK_FALSE(FindModeByDuration(modes, 1280, 720, 400'000).has_value());  // 25 fps
     }
 
+    TEST_CASE("ingest sizes are any even size up to 4K either way up") {
+        CHECK(IsIngestSize(3840, 2160));
+        CHECK(IsIngestSize(2160, 3840));
+        CHECK(IsIngestSize(1080, 1920));
+        CHECK(IsIngestSize(1440, 1080));
+        CHECK(IsIngestSize(2, 2));
+        CHECK_FALSE(IsIngestSize(3840, 3840));
+        CHECK_FALSE(IsIngestSize(4096, 2160));
+        CHECK_FALSE(IsIngestSize(1281, 720));
+        CHECK_FALSE(IsIngestSize(0, 720));
+    }
+
     TEST_CASE("caps must use a catalog frame rate and admit the smallest size") {
         CHECK(IsValidCap(kFullCatalogCap));
         CHECK(IsValidCap({640, 360, 15}));

@@ -15,16 +15,16 @@ namespace mwb::native {
 struct LoadPlaceholderCommand {
     PlaceholderKind kind;
     std::wstring path;
-    std::uint32_t width;   // even, up to frame::kMaxWidth
-    std::uint32_t height;  // even, up to frame::kMaxHeight
+    std::uint32_t width;   // frame::IsIngestSize
+    std::uint32_t height;
 };
 
 struct ShowPlaceholderCommand {
     std::optional<PlaceholderKind> kind;  // nullopt: back to live frames
 };
 
-// New size of the raw frames on the ingest pipe. The parser checks the shape (even, within the
-// protocol maximum); the hub checks it against the catalog and the cap.
+// New size of the raw frames on the ingest pipe: the size the phone encodes (frame::IsIngestSize),
+// not necessarily a catalog size.
 struct SetIngestSizeCommand {
     std::uint32_t width;
     std::uint32_t height;
