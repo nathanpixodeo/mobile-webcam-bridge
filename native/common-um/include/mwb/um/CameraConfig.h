@@ -16,9 +16,16 @@
 namespace mwb::um {
 
 struct CameraSettings {
-    frame::VideoMode mode{1280, 720, 30, 1};
+    // Advertised first (registry Width, Height, FpsNum, FpsDen); always an advertised mode.
+    frame::VideoMode defaultMode{1920, 1080, 30, 1};
+    // Limit on the advertised modes (registry MaxWidth, MaxHeight, MaxFps). Installations from
+    // before the cap existed have none; they advertise their single mode, as they did then.
+    frame::ModeCap cap{frame::kFullCatalogCap};
     std::wstring pipeName{frame::kDefaultPublicPipeName};
     std::wstring friendlyName{L"Mobile Webcam"};
+
+    // The modes the camera offers, in advertising order (protocol/FRAME_PIPE.md §1).
+    [[nodiscard]] frame::ModeList AdvertisedModes() const noexcept { return frame::AdvertisedModes(cap, defaultMode); }
 };
 
 // Fills `settings` from the registry. Returns S_OK when the key exists, S_FALSE when it does not

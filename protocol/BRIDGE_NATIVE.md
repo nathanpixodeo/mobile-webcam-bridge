@@ -40,12 +40,18 @@ Error codes: `USAGE`, `NOT_INSTALLED`, `DEVICE_NOT_PRESENT`, `DEVICE_BUSY`, `ELE
 {"ok":true,
  "installDir":"C:\\Program Files\\MobileWebcamBridge\\0.1.0",
  "os":{"build":26200,"isWin11":true},
- "camera":{"installed":true,"backend":"mf","friendlyName":"Mobile Webcam","width":1280,"height":720,"fpsNum":30,"fpsDen":1,"pipeName":"mobile-webcam-bridge-video"},
+ "camera":{"installed":true,"backend":"mf","friendlyName":"Mobile Webcam",
+           "width":1920,"height":1080,"fpsNum":30,"fpsDen":1,
+           "maxWidth":3840,"maxHeight":2160,"maxFps":60,
+           "modes":[{"width":1920,"height":1080,"fpsNum":30,"fpsDen":1},{"width":3840,"height":2160,"fpsNum":30,"fpsDen":1}],
+           "pipeName":"mobile-webcam-bridge-video"},
  "mic":{"installed":true,"devicePresent":true,"problemCode":0}}
 ```
 
-`camera.backend` ∈ `mf`, `dshow`, `none`. When the camera is not installed, `camera` is
-`{"installed":false}`. When the driver is not installed, `mic` is `{"installed":false}`.
+`camera.backend` ∈ `mf`, `dshow`, `none`. `width`/`height`/`fpsNum`/`fpsDen` are the default mode,
+`maxWidth`/`maxHeight`/`maxFps` the cap, and `modes` every advertised mode in advertising order
+(protocol/FRAME_PIPE.md §1; the example above is shortened). When the camera is not installed,
+`camera` is `{"installed":false}`. When the driver is not installed, `mic` is `{"installed":false}`.
 
 ### `bridge-native install [options]`
 
@@ -55,8 +61,10 @@ Self-elevates (one UAC prompt), performs every step, prints the result.
 |----------------------------------|----------|-------------------------------------------------|
 | `--camera auto\|mf\|dshow\|none` | `auto`   | `auto` = `mf` on build ≥ 22000, else `dshow`    |
 | `--mic` / `--no-mic`             | `--mic`  | install the virtual microphone driver           |
-| `--width N --height N`           | 1280×720 | camera mode (whitelist: 640×360, 1280×720, 1920×1080) |
-| `--fps N`                        | 30       | 15, 24, 25, 30, 60                              |
+| `--width N --height N`           | 1920×1080 | default mode size: a catalog size (protocol/FRAME_PIPE.md §1) |
+| `--fps N`                        | 30       | default mode frame rate: 15, 30, 60             |
+| `--max-width N --max-height N`   | 3840×2160 | cap: only catalog modes within it are advertised |
+| `--max-fps N`                    | 60       | cap on the advertised frame rates: 15, 30, 60   |
 | `--name TEXT`                    | `Mobile Webcam` | camera friendly name (MF appends "Windows Virtual Camera") |
 
 ```json
@@ -64,6 +72,8 @@ Self-elevates (one UAC prompt), performs every step, prints the result.
  "steps":[{"name":"copy-files","ok":true},{"name":"register-mf-source","ok":true},
           {"name":"create-virtual-camera","ok":true},{"name":"install-mic-driver","ok":true}]}
 ```
+
+The default mode must be a catalog mode within the cap (usage error otherwise).
 
 A failed step stops the run: `"ok":false`, the failing step carries `"error":{code,message}`,
 and steps already done are rolled back where possible (reported as `{"name":"rollback-…"}`).
@@ -84,9 +94,11 @@ Self-elevates. Without flags it removes everything. Same output shape as `instal
 `camera.duplicateBackends`, `mic.driver`, `mic.problemCode`, `mic.endpoint`, `mic.privacy`,
 `system.testSigning`, `system.secureBoot`, `pipe.free`.
 
-### `bridge-native video watch [--frames N] [--timeout-ms T] [--pipe-name NAME]`
+### `bridge-native video watch [--frames N] [--timeout-ms T] [--pipe-name NAME] [--width N --height N --fps N]`
 
-Connects to the public pipe as a consumer (diagnostics and integration tests).
+Connects to the public pipe as a consumer and subscribes to the given mode (diagnostics and
+integration tests). The mode defaults to the installed default mode, or 1280×720@30 when nothing
+is installed.
 
 ```json
 {"ok":true,"frames":30,"placeholderFrames":0,"width":1280,"height":720,"elapsedMs":1003}
@@ -99,36 +111,48 @@ One-shot: `{"ok":true,"present":true,"busy":false,"bufferedBytes":0,"streamActiv
 
 ## 3. Long-running commands
 
-### `bridge-native video hub --ingest-pipe PATH [--pipe-name NAME] [--width N --height N --fps-num N --fps-den N]`
+### `bridge-native video hub --ingest-pipe PATH [--pipe-name NAME] [--width N --height N --fps-num N --fps-den N] [--max-width N --max-height N --max-fps N]`
 
 `--ingest-pipe` takes the full path (`\\.\pipe\mobile-webcam-bridge-ingest-<token>`); `--pipe-name` takes the public pipe name without the `\\.\pipe\` prefix.
 
-Mode defaults to the installed camera mode (registry); the explicit options exist for tests.
+The default mode (also the initial ingest size) and the cap come from the registry; the explicit
+options exist for tests. Without a registry entry, `--width`/`--height` are required and the cap
+defaults to the whole catalog.
 
 **stdout events**
 
 ```json
-{"event":"ready","ingestPipe":"\\\\.\\pipe\\mobile-webcam-bridge-ingest-0123456789abcdef","publicPipe":"\\\\.\\pipe\\mobile-webcam-bridge-video","width":1280,"height":720,"fpsNum":30,"fpsDen":1}
-{"event":"consumers","count":1}
+{"event":"ready","ingestPipe":"\\\\.\\pipe\\mobile-webcam-bridge-ingest-0123456789abcdef","publicPipe":"\\\\.\\pipe\\mobile-webcam-bridge-video","width":1920,"height":1080,"fpsNum":30,"fpsDen":1,"maxWidth":3840,"maxHeight":2160,"maxFps":60}
+{"event":"consumers","count":2,"modes":[{"width":1920,"height":1080,"fpsNum":30,"fpsDen":1},{"width":640,"height":480,"fpsNum":30,"fpsDen":1}]}
+{"event":"ingestMode","width":3840,"height":2160}
 {"event":"ingest","connected":true}
 {"event":"stats","framesIn":300,"framesOut":300,"consumerDrops":0,"placeholderFrames":12,"consumers":1}
 {"event":"error","code":"PIPE_IN_USE","message":"...","fatal":true}
 ```
 
-- `consumers` is emitted on every change of the consumer count.
+- `ready`: `width`/`height`/`fpsNum`/`fpsDen` are the default mode, which is also the initial
+  ingest size; `maxWidth`/`maxHeight`/`maxFps` are the cap.
+- `consumers` is emitted on every change of the set of subscribed consumers. `modes` holds one
+  entry per consumer (`modes.length == count`), in subscription order.
+- `ingestMode` acknowledges an `ingest` command once the new ingest size is in effect.
 - `stats` is emitted every 5 s.
 - A fatal error is followed by exit code 1.
 
 **stdin commands**
 
 ```json
-{"cmd":"loadPlaceholder","kind":"no-device","path":"C:\\Users\\me\\AppData\\Local\\mobile-webcam-bridge\\cache\\no-device-1280x720.nv12"}
+{"cmd":"loadPlaceholder","kind":"no-device","width":1920,"height":1080,"path":"C:\\Users\\me\\AppData\\Local\\mobile-webcam-bridge\\cache\\no-device-1280x720.nv12"}
 {"cmd":"placeholder","kind":"no-device"}
 {"cmd":"placeholder","kind":null}
+{"cmd":"ingest","width":3840,"height":2160}
 ```
 
-- `loadPlaceholder`: reads the file (must be exactly `width × height × 3 / 2` bytes) and stores
-  it under `kind`. Kinds: `no-device`, `app-closed`, `paused`, `background`, `stopped`.
+- `loadPlaceholder`: reads the file (must be exactly `width × height × 3 / 2` bytes; even
+  `width`/`height` up to 3840 × 2160) and stores it under `kind`. The hub scales it to each
+  consumer's size. Kinds: `no-device`, `app-closed`, `paused`, `background`, `stopped`.
+- `ingest`: sets the size of the raw frames on the ingest pipe; must be a catalog size within the
+  cap. The hub drops the current ingest writer and any partial frame, then answers with the
+  `ingestMode` event. Node stops the decoder first and starts the next one after `ingestMode`.
 - `placeholder` with a kind: show that placeholder until told otherwise.
 - `placeholder` with `null`: show live ingest frames; if no ingest frame arrives for 300 ms, show
   the `stopped` placeholder (or a built-in neutral frame if none is loaded).

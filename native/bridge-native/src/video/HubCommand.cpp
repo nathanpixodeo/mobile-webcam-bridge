@@ -1,5 +1,9 @@
 #include "video/HubCommand.h"
 
+#include <cmath>
+
+#include <mwb/FrameProtocol.h>
+
 #include "core/Json.h"
 #include "core/Strings.h"
 
@@ -13,6 +17,18 @@ PlaceholderKind RequireKind(const JsonValue& value) {
     const std::optional<PlaceholderKind> kind = ParsePlaceholderKind(*text);
     if (!kind) throw HubCommandError("unknown placeholder kind \"" + *text + "\"");
     return *kind;
+}
+
+// An even integer in [2, max]: NV12 needs even dimensions.
+std::uint32_t RequireDimension(const JsonValue& document, std::string_view key, std::uint32_t max) {
+    const JsonValue* value = document.Find(key);
+    const double* number = value != nullptr ? value->AsNumber() : nullptr;
+    const std::string name(key);
+    if (number == nullptr) throw HubCommandError("\"" + name + "\" must be a number");
+    if (*number < 2 || *number > max || std::floor(*number) != *number || static_cast<std::uint32_t>(*number) % 2 != 0) {
+        throw HubCommandError("\"" + name + "\" must be an even integer from 2 to " + std::to_string(max));
+    }
+    return static_cast<std::uint32_t>(*number);
 }
 
 }  // namespace
@@ -41,7 +57,13 @@ HubCommand ParseHubCommand(std::string_view line) {
         const JsonValue* path = document.Find("path");
         const std::string* pathText = path != nullptr ? path->AsString() : nullptr;
         if (pathText == nullptr || pathText->empty()) throw HubCommandError("\"loadPlaceholder\" needs a non-empty \"path\"");
-        return LoadPlaceholderCommand{RequireKind(*kind), ToWide(*pathText)};
+        return LoadPlaceholderCommand{RequireKind(*kind), ToWide(*pathText),
+                                      RequireDimension(document, "width", mwb::frame::kMaxWidth),
+                                      RequireDimension(document, "height", mwb::frame::kMaxHeight)};
+    }
+    if (*name == "ingest") {
+        return SetIngestSizeCommand{RequireDimension(document, "width", mwb::frame::kMaxWidth),
+                                    RequireDimension(document, "height", mwb::frame::kMaxHeight)};
     }
     throw HubCommandError("unknown command \"" + *name + "\"");
 }

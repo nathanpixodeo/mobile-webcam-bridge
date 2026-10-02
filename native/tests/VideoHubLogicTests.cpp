@@ -123,13 +123,29 @@ TEST_SUITE("HubCommand") {
         CHECK_FALSE(std::get<ShowPlaceholderCommand>(live).kind.has_value());
     }
 
-    TEST_CASE("loadPlaceholder carries a UTF-8 path") {
-        const HubCommand load =
-            ParseHubCommand(R"({"cmd":"loadPlaceholder","kind":"paused","path":"C:\\cache\\caf\u00e9.nv12"})");
+    TEST_CASE("loadPlaceholder carries a UTF-8 path and the frame size") {
+        const HubCommand load = ParseHubCommand(
+            R"({"cmd":"loadPlaceholder","kind":"paused","width":1920,"height":1080,"path":"C:\\cache\\caf\u00e9.nv12"})");
         REQUIRE(std::holds_alternative<LoadPlaceholderCommand>(load));
         const auto& command = std::get<LoadPlaceholderCommand>(load);
         CHECK(command.kind == PlaceholderKind::Paused);
         CHECK(command.path == std::wstring(L"C:\\cache\\caf\u00e9.nv12"));
+        CHECK(command.width == 1920);
+        CHECK(command.height == 1080);
+    }
+
+    TEST_CASE("ingest carries an even frame size within the protocol maximum") {
+        const HubCommand ingest = ParseHubCommand(R"({"cmd":"ingest","width":3840,"height":2160})");
+        REQUIRE(std::holds_alternative<SetIngestSizeCommand>(ingest));
+        CHECK(std::get<SetIngestSizeCommand>(ingest).width == 3840);
+        CHECK(std::get<SetIngestSizeCommand>(ingest).height == 2160);
+
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":3840})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":"3840","height":2160})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":641,"height":360})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":640.5,"height":360})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":7680,"height":4320})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"ingest","width":0,"height":0})"), HubCommandError);
     }
 
     TEST_CASE("malformed commands are rejected") {
@@ -141,6 +157,8 @@ TEST_SUITE("HubCommand") {
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"placeholder","kind":3})"), HubCommandError);
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"loadPlaceholder","kind":"paused"})"), HubCommandError);
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"loadPlaceholder","kind":"paused","path":""})"), HubCommandError);
+        CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"loadPlaceholder","kind":"paused","path":"a.nv12"})"),
+                        HubCommandError);  // no size
         CHECK_THROWS_AS((void)ParseHubCommand(R"({"cmd":"explode"})"), HubCommandError);
     }
 }

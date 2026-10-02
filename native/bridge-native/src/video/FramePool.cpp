@@ -24,6 +24,7 @@ std::shared_ptr<FramePool> FramePool::Create(std::size_t frameBytes, std::size_t
 }
 
 FrameBytes FramePool::Acquire() {
+    std::size_t frameBytes = 0;
     {
         const std::lock_guard lock(mutex_);
         if (!cache_.empty()) {
@@ -32,16 +33,25 @@ FrameBytes FramePool::Acquire() {
             buffer.clear();
             return buffer;
         }
+        frameBytes = frameBytes_;
     }
     FrameBytes buffer;
-    buffer.reserve(frameBytes_);
+    buffer.reserve(frameBytes);
     return buffer;
 }
 
 void FramePool::Release(FrameBytes buffer) {
-    if (buffer.capacity() < frameBytes_) return;
     const std::lock_guard lock(mutex_);
+    // Buffers of a previous, larger size would pin memory for nothing (4K frames are 12 MB).
+    if (buffer.capacity() < frameBytes_ || buffer.capacity() > 2 * frameBytes_) return;
     if (cache_.size() < maxCached_) cache_.push_back(std::move(buffer));
+}
+
+void FramePool::SetFrameBytes(std::size_t frameBytes) {
+    const std::lock_guard lock(mutex_);
+    if (frameBytes == frameBytes_) return;
+    frameBytes_ = frameBytes;
+    cache_.clear();
 }
 
 SharedFrameBytes FramePool::Share(FrameBytes buffer) {

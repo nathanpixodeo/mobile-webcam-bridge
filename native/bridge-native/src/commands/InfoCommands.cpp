@@ -9,6 +9,7 @@
 #include "install/MicDriver.h"
 #include "install/ProductRegistry.h"
 #include "platform/OsVersion.h"
+#include "video/ModeJson.h"
 
 namespace mwb::native {
 
@@ -59,13 +60,12 @@ public:
 
         writer.Key("camera").BeginObject().Field("installed", camera.has_value());
         if (camera) {
-            writer.Field("backend", ToString(camera->backend))
-                .Field("friendlyName", camera->friendlyName)
-                .Field("width", camera->mode.width)
-                .Field("height", camera->mode.height)
-                .Field("fpsNum", camera->mode.fpsNum)
-                .Field("fpsDen", camera->mode.fpsDen)
-                .Field("pipeName", camera->pipeName);
+            writer.Field("backend", ToString(camera->backend)).Field("friendlyName", camera->friendlyName);
+            WriteModeFields(writer, camera->defaultMode);
+            WriteCapFields(writer, camera->cap);
+            writer.Key("modes").BeginArray();
+            for (const mwb::frame::VideoMode& mode : camera->AdvertisedModes()) WriteMode(writer, mode);
+            writer.EndArray().Field("pipeName", camera->pipeName);
         }
         writer.EndObject();
 

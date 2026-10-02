@@ -5,14 +5,15 @@
 
 namespace mwb::native {
 
-IngestServer::IngestServer(std::wstring pipePath, const std::wstring& sddl, std::size_t frameBytes,
+IngestServer::IngestServer(std::wstring pipePath, const std::wstring& sddl, mwb::frame::FrameSize frameSize,
                            std::shared_ptr<FramePool> pool, Callbacks callbacks)
     : pipePath_(std::move(pipePath)),
       security_(sddl),
-      frameBytes_(frameBytes),
       pool_(std::move(pool)),
-      callbacks_(std::move(callbacks)) {
-    stop_.create(wil::EventOptions::ManualReset);
+      callbacks_(std::move(callbacks)),
+      frameSize_(frameSize) {
+    interrupt_.create(wil::EventOptions::ManualReset);
+    sizeApplied_.create(wil::EventOptions::None);
 }
 
 IngestServer::~IngestServer() { Stop(); }
@@ -29,36 +30,81 @@ void IngestServer::Start() {
 }
 
 void IngestServer::Stop() noexcept {
-    stop_.SetEvent();
+    stopping_.store(true);
+    interrupt_.SetEvent();
     if (thread_.joinable()) thread_.join();
+}
+
+bool IngestServer::SetFrameSize(mwb::frame::FrameSize size, DWORD timeoutMs) {
+    sizeApplied_.ResetEvent();
+    {
+        const std::lock_guard lock(sizeMutex_);
+        pendingSize_ = size;
+    }
+    interrupt_.SetEvent();
+    return ::WaitForSingleObject(sizeApplied_.get(), timeoutMs) == WAIT_OBJECT_0;
+}
+
+bool IngestServer::ApplyPendingSize() {
+    std::optional<mwb::frame::FrameSize> size;
+    {
+        const std::lock_guard lock(sizeMutex_);
+        size.swap(pendingSize_);
+    }
+    if (!size) return false;
+    frameSize_ = *size;
+    pool_->SetFrameBytes(mwb::frame::Nv12FrameBytes(size->width, size->height));
+    sizeApplied_.SetEvent();
+    return true;
 }
 
 void IngestServer::Run() noexcept {
     try {
-        FrameAssembler assembler(frameBytes_, [this] { return pool_->Acquire(); });
+        const auto makeAssembler = [this] {
+            return FrameAssembler(mwb::frame::Nv12FrameBytes(frameSize_.width, frameSize_.height),
+                                  [this] { return pool_->Acquire(); });
+        };
+        FrameAssembler assembler = makeAssembler();
         OverlappedOperation operation;
 
-        while (true) {
-            const IoResult connect = AwaitClient(pipe_.get(), operation, stop_.get());
-            if (connect.status == IoStatus::Stopped) break;
+        // The interrupt event doubles as the "stop" handle of every wait: Stopped means either a
+        // real stop or a size change, told apart by stopping_.
+        const auto onInterrupt = [&] {
+            if (stopping_.load()) return false;
+            interrupt_.ResetEvent();
+            if (ApplyPendingSize()) assembler = makeAssembler();
+            return true;
+        };
+
+        while (!stopping_.load()) {
+            const IoResult connect = AwaitClient(pipe_.get(), operation, interrupt_.get());
+            if (connect.status == IoStatus::Stopped) {
+                ::DisconnectNamedPipe(pipe_.get());
+                if (!onInterrupt()) break;
+                continue;
+            }
             if (connect.status != IoStatus::Completed) {
                 ::DisconnectNamedPipe(pipe_.get());
-                if (::WaitForSingleObject(stop_.get(), 200) == WAIT_OBJECT_0) break;
+                if (::WaitForSingleObject(interrupt_.get(), 200) == WAIT_OBJECT_0 && !onInterrupt()) break;
                 continue;
             }
 
             callbacks_.onConnection(true);
             assembler.Reset();
+            bool interrupted = false;
             while (true) {
                 const std::span<std::uint8_t> region = assembler.WritableRegion();
                 const IoResult read = ReadSome(pipe_.get(), operation, region.data(), static_cast<DWORD>(region.size()),
-                                               stop_.get());
-                if (read.status != IoStatus::Completed) break;  // writer gone or stopping
-                if (std::optional<FrameBytes> frame = assembler.Commit(read.bytes)) callbacks_.onFrame(std::move(*frame));
+                                               interrupt_.get());
+                if (read.status == IoStatus::Stopped) interrupted = true;
+                if (read.status != IoStatus::Completed) break;  // writer gone, stopping or resizing
+                if (std::optional<FrameBytes> frame = assembler.Commit(read.bytes)) {
+                    callbacks_.onFrame(std::move(*frame), frameSize_);
+                }
             }
             ::DisconnectNamedPipe(pipe_.get());
             callbacks_.onConnection(false);
-            if (::WaitForSingleObject(stop_.get(), 0) == WAIT_OBJECT_0) break;
+            if (interrupted && !onInterrupt()) break;
         }
     } catch (...) {
         // Unexpected failure (out of memory); the hub keeps serving placeholders.

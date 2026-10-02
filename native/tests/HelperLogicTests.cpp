@@ -60,11 +60,12 @@ TEST_SUITE("LineSplitter") {
 }
 
 TEST_SUITE("InstallOptions") {
-    TEST_CASE("defaults: auto camera, mic, 1280x720@30, name Mobile Webcam") {
+    TEST_CASE("defaults: auto camera, mic, 1920x1080@30 up to the whole catalog, name Mobile Webcam") {
         const InstallOptions options = ToInstallOptions(InstallArgParser().Parse({}));
         CHECK(options.camera == CameraChoice::Auto);
         CHECK(options.mic);
-        CHECK(options.mode == mwb::frame::VideoMode{1280, 720, 30, 1});
+        CHECK(options.defaultMode == mwb::frame::VideoMode{1920, 1080, 30, 1});
+        CHECK(options.cap == mwb::frame::kFullCatalogCap);
         CHECK(options.friendlyName == L"Mobile Webcam");
     }
 
@@ -75,7 +76,7 @@ TEST_SUITE("InstallOptions") {
         const InstallOptions options = ToInstallOptions(InstallArgParser().Parse(args));
         CHECK(options.camera == CameraChoice::DirectShow);
         CHECK_FALSE(options.mic);
-        CHECK(options.mode == mwb::frame::VideoMode{1920, 1080, 60, 1});
+        CHECK(options.defaultMode == mwb::frame::VideoMode{1920, 1080, 60, 1});
         CHECK(options.friendlyName == L"Desk Cam");
 
         const auto rejects = [](std::vector<std::wstring> bad) {
@@ -86,7 +87,25 @@ TEST_SUITE("InstallOptions") {
         rejects({L"--width", L"1280"});
         rejects({L"--width", L"1024", L"--height", L"768"});
         rejects({L"--fps", L"29"});
+        rejects({L"--fps", L"24"});
+        rejects({L"--width", L"3840", L"--height", L"2160", L"--fps", L"60"});
+        rejects({L"--max-width", L"1920"});
+        rejects({L"--max-fps", L"25"});
+        rejects({L"--max-width", L"320", L"--max-height", L"240"});
+        rejects({L"--max-width", L"1280", L"--max-height", L"720"});  // default 1920x1080 exceeds it
         rejects({L"--name", L"bad\"name"});
+    }
+
+    TEST_CASE("the cap limits the advertised modes and must admit the default mode") {
+        const std::vector<std::wstring> args{L"--width",      L"1280", L"--height",  L"720", L"--fps", L"30",
+                                             L"--max-width", L"1920", L"--max-height", L"1080", L"--max-fps", L"30"};
+        const InstallOptions options = ToInstallOptions(InstallArgParser().Parse(args));
+        CHECK(options.defaultMode == mwb::frame::VideoMode{1280, 720, 30, 1});
+        CHECK(options.cap == mwb::frame::ModeCap{1920, 1080, 30});
+        const mwb::frame::ModeList modes = mwb::frame::AdvertisedModes(options.cap, options.defaultMode);
+        CHECK(modes[0] == options.defaultMode);
+        CHECK_FALSE(modes.Contains({2560, 1440, 30, 1}));
+        CHECK_FALSE(modes.Contains({1920, 1080, 60, 1}));
     }
 
     TEST_CASE("backend resolution follows the OS build") {

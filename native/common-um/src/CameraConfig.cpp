@@ -64,16 +64,25 @@ HRESULT LoadCameraSettings(CameraSettings& settings) noexcept try {
     if (status == ERROR_FILE_NOT_FOUND) return S_FALSE;
     RETURN_IF_WIN32_ERROR(status);
 
-    frame::VideoMode mode = settings.mode;
+    frame::VideoMode mode = settings.defaultMode;
     if (const auto width = ReadDword(key.get(), L"Width")) mode.width = *width;
     if (const auto height = ReadDword(key.get(), L"Height")) mode.height = *height;
     if (const auto fpsNum = ReadDword(key.get(), L"FpsNum")) mode.fpsNum = *fpsNum;
     if (const auto fpsDen = ReadDword(key.get(), L"FpsDen")) mode.fpsDen = *fpsDen;
-    if (frame::IsSupportedMode(mode)) {
-        settings.mode = mode;
+
+    const auto maxWidth = ReadDword(key.get(), L"MaxWidth");
+    const auto maxHeight = ReadDword(key.get(), L"MaxHeight");
+    const auto maxFps = ReadDword(key.get(), L"MaxFps");
+    const frame::ModeCap cap = maxWidth && maxHeight && maxFps ? frame::ModeCap{*maxWidth, *maxHeight, *maxFps}
+                                                               : frame::ModeCap{mode.width, mode.height, mode.fpsNum};
+
+    if (frame::IsValidCap(cap) && frame::IsAdvertised(cap, mode)) {
+        settings.defaultMode = mode;
+        settings.cap = cap;
     } else {
-        trace::Writef(trace::Level::Warning, L"Ignoring unsupported camera mode {}x{}@{}/{} from the registry",
-                      mode.width, mode.height, mode.fpsNum, mode.fpsDen);
+        trace::Writef(trace::Level::Warning,
+                      L"Ignoring unsupported camera modes from the registry: default {}x{}@{}/{}, cap {}x{}@{}",
+                      mode.width, mode.height, mode.fpsNum, mode.fpsDen, cap.maxWidth, cap.maxHeight, cap.maxFps);
     }
 
     if (auto pipeName = ReadString(key.get(), L"PipeName", kMaxPipeNameLength)) {

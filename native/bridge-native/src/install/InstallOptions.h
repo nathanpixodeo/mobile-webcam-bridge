@@ -23,7 +23,8 @@ enum class CameraChoice { Auto, MediaFoundation, DirectShow, None };
 struct InstallOptions {
     CameraChoice camera = CameraChoice::Auto;
     bool mic = true;
-    mwb::frame::VideoMode mode{1280, 720, 30, 1};
+    mwb::frame::VideoMode defaultMode{1920, 1080, 30, 1};  // advertised first
+    mwb::frame::ModeCap cap{mwb::frame::kFullCatalogCap};  // limits the advertised modes
     std::wstring friendlyName = L"Mobile Webcam";
 };
 

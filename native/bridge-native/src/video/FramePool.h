@@ -1,4 +1,4 @@
-// Recycles frame-sized buffers. Frames are 1.4-3 MB; allocating them fresh 30-60 times per
+// Recycles frame-sized buffers. Frames are 0.3-12 MB; allocating them fresh 30-60 times per
 // second would commit and zero new pages for every frame.
 #pragma once
 
@@ -30,6 +30,8 @@ public:
     void Release(FrameBytes buffer);
     // Shares a filled buffer; it returns to the pool once the last reference is gone.
     [[nodiscard]] SharedFrameBytes Share(FrameBytes buffer);
+    // Changes the size of the buffers handed out from now on; cached buffers are dropped.
+    void SetFrameBytes(std::size_t frameBytes);
 
 private:
     std::size_t frameBytes_;

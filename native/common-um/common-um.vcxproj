@@ -54,6 +54,7 @@
     <ClInclude Include="include\mwb\um\CameraConfig.h" />
     <ClInclude Include="include\mwb\um\ColorConvert.h" />
     <ClInclude Include="include\mwb\um\Guid.h" />
+    <ClInclude Include="include\mwb\um\Nv12Scaler.h" />
     <ClInclude Include="include\mwb\um\PipeFrameReceiver.h" />
     <ClInclude Include="include\mwb\um\Placeholder.h" />
     <ClInclude Include="include\mwb\um\Tracing.h" />
@@ -64,6 +65,7 @@
   <ItemGroup>
     <ClCompile Include="src\CameraConfig.cpp" />
     <ClCompile Include="src\ColorConvert.cpp" />
+    <ClCompile Include="src\Nv12Scaler.cpp" />
     <ClCompile Include="src\PipeFrameReceiver.cpp" />
     <ClCompile Include="src\Placeholder.cpp" />
     <ClCompile Include="src\Tracing.cpp" />

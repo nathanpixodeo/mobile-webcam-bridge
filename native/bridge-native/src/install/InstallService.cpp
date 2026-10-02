@@ -99,7 +99,8 @@ CommandOutcome InstallService::Install(const InstallOptions& options) {
 
     std::optional<CameraRegistration> camera;
     if (backend != CameraBackend::None) {
-        camera = CameraRegistration{backend, options.friendlyName, options.mode, mwb::frame::kDefaultPublicPipeName};
+        camera = CameraRegistration{backend, options.friendlyName, options.defaultMode, options.cap,
+                                    mwb::frame::kDefaultPublicPipeName};
     }
     plan.push_back(std::make_unique<WriteRegistryStep>(
         ProductRegistration{installDir.native(), mwb::ids::kProductVersion}, camera));

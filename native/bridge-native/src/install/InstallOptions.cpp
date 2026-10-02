@@ -30,6 +30,9 @@ ArgParser InstallArgParser() {
         {L"width", true},
         {L"height", true},
         {L"fps", true},
+        {L"max-width", true},
+        {L"max-height", true},
+        {L"max-fps", true},
         {L"name", true},
         {L"elevated", false, true},
         {L"result-pipe", true, true},
@@ -46,6 +49,17 @@ ArgParser UninstallArgParser() {
 }
 
 namespace {
+
+// "640x360, 640x480, …; fps 15, 30, 60 (3840x2160: up to 30)" from the catalog itself.
+std::string CatalogDescription() {
+    std::string sizes;
+    for (auto it = mwb::frame::kCatalogSizes.rbegin(); it != mwb::frame::kCatalogSizes.rend(); ++it) {
+        if (!sizes.empty()) sizes += ", ";
+        sizes += std::to_string(it->width) + "x" + std::to_string(it->height);
+    }
+    return "sizes " + sizes + "; fps 15, 30, 60 (above 2560x1440: up to " +
+           std::to_string(mwb::frame::kMaxFpsAbove1440p) + ")";
+}
 
 bool IsValidFriendlyName(std::wstring_view name) noexcept {
     if (name.empty() || name.size() > 64) return false;
@@ -79,14 +93,30 @@ InstallOptions ToInstallOptions(const ParsedOptions& options) {
         throw CommandError(ErrorCode::Usage, "--width and --height must be given together");
     }
     if (width) {
-        result.mode.width = *width;
-        result.mode.height = *height;
+        result.defaultMode.width = *width;
+        result.defaultMode.height = *height;
     }
-    if (const std::optional<std::uint32_t> fps = options.UInt32(L"fps", 1, 240)) result.mode.fpsNum = *fps;
-    result.mode.fpsDen = 1;
-    if (!mwb::frame::IsSupportedMode(result.mode)) {
-        throw CommandError(ErrorCode::Usage,
-                           "unsupported camera mode; sizes: 640x360, 1280x720, 1920x1080; fps: 15, 24, 25, 30, 60");
+    if (const std::optional<std::uint32_t> fps = options.UInt32(L"fps", 1, 240)) result.defaultMode.fpsNum = *fps;
+    result.defaultMode.fpsDen = 1;
+    if (!mwb::frame::IsSupportedMode(result.defaultMode)) {
+        throw CommandError(ErrorCode::Usage, "unsupported camera mode; " + CatalogDescription());
+    }
+
+    const std::optional<std::uint32_t> maxWidth = options.UInt32(L"max-width", 1, mwb::frame::kMaxWidth);
+    const std::optional<std::uint32_t> maxHeight = options.UInt32(L"max-height", 1, mwb::frame::kMaxHeight);
+    if (maxWidth.has_value() != maxHeight.has_value()) {
+        throw CommandError(ErrorCode::Usage, "--max-width and --max-height must be given together");
+    }
+    if (maxWidth) {
+        result.cap.maxWidth = *maxWidth;
+        result.cap.maxHeight = *maxHeight;
+    }
+    if (const std::optional<std::uint32_t> maxFps = options.UInt32(L"max-fps", 1, 240)) result.cap.maxFps = *maxFps;
+    if (!mwb::frame::IsValidCap(result.cap)) {
+        throw CommandError(ErrorCode::Usage, "--max-fps must be 15, 30 or 60 and the cap at least 640x360");
+    }
+    if (!mwb::frame::Admits(result.cap, result.defaultMode)) {
+        throw CommandError(ErrorCode::Usage, "the default camera mode (--width/--height/--fps) exceeds the cap (--max-*)");
     }
 
     if (const std::optional<std::wstring> name = options.Value(L"name")) {

@@ -1,8 +1,8 @@
 // Client side of the public frame pipe (protocol/FRAME_PIPE.md).
 //
-// A private thread connects to `bridge-native video hub`, reads header + NV12 payload, validates
-// every header against the installed camera mode and publishes only the newest frame through a
-// lock-free triple buffer. Any protocol violation drops the connection; the thread reconnects with
+// A private thread connects to `bridge-native video hub`, subscribes to one camera mode, reads
+// header + NV12 payload, validates every header against that mode and publishes only the newest
+// frame through a lock-free triple buffer. Any protocol violation drops the connection; the thread reconnects with
 // a 250 ms → 2 s backoff for as long as the receiver runs.
 #pragma once
 
@@ -32,7 +32,8 @@ struct ReceivedFrame {
 
 class PipeFrameReceiver final {
 public:
-    // `pipeName` without the "\\.\pipe\" prefix; `mode` must satisfy frame::IsSupportedMode.
+    // `pipeName` without the "\\.\pipe\" prefix; `mode` is the mode to subscribe to and must
+    // satisfy frame::IsSupportedMode.
     PipeFrameReceiver(std::wstring_view pipeName, const frame::VideoMode& mode);
     ~PipeFrameReceiver();
 
@@ -71,6 +72,10 @@ private:
     [[nodiscard]] SessionEnd ReceiveFrames(HANDLE pipe) noexcept;
     // Reads exactly `length` bytes; false on disconnect, I/O error or stop request.
     [[nodiscard]] bool ReadExact(HANDLE pipe, void* destination, std::uint32_t length) noexcept;
+    // Writes exactly `length` bytes; false on disconnect, I/O error or stop request.
+    [[nodiscard]] bool WriteExact(HANDLE pipe, const void* source, std::uint32_t length) noexcept;
+    // Waits for an overlapped operation on `pipe`; false when it failed or a stop was requested.
+    [[nodiscard]] bool Complete(HANDLE pipe, OVERLAPPED& overlapped, DWORD* transferred) noexcept;
 
     const std::wstring pipePath_;
     const frame::VideoMode mode_;

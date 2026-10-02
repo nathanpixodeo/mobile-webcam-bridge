@@ -1,4 +1,4 @@
-// HKLM\SOFTWARE\MobileWebcamBridge (product) and ...\Camera (camera mode), always in the 64-bit view.
+// HKLM\SOFTWARE\MobileWebcamBridge (product) and ...\Camera (camera modes), always in the 64-bit view.
 // Layout: native/common/include/mwb/Identifiers.h.
 #pragma once
 
@@ -19,7 +19,12 @@ struct ProductRegistration {
 struct CameraRegistration {
     CameraBackend backend = CameraBackend::None;
     std::wstring friendlyName;
-    mwb::frame::VideoMode mode{};
+    mwb::frame::VideoMode defaultMode{};
+    mwb::frame::ModeCap cap{};
+
+    [[nodiscard]] mwb::frame::ModeList AdvertisedModes() const noexcept {
+        return mwb::frame::AdvertisedModes(cap, defaultMode);
+    }
     std::wstring pipeName;
 };
 

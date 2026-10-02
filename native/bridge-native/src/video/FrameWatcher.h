@@ -1,5 +1,6 @@
 // `bridge-native video watch`: connects to the public pipe like a camera component would,
-// validates every header and counts frames (diagnostics and integration tests).
+// subscribes to one mode, validates every header and counts frames (diagnostics and integration
+// tests).
 #pragma once
 
 #include <cstdint>

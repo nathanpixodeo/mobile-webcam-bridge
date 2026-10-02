@@ -10,11 +10,16 @@
 
 namespace mwb::native {
 
-// One frame as sent on the public pipe. The header is per frame; consumers that just connected
-// get FORMAT_CHANGED added on their copy of it.
+// One frame the hub publishes (live or placeholder), at its own size. Each consumer turns it into
+// a frame message of its subscribed size (scaling when the sizes differ) and adds FORMAT_CHANGED
+// to the first one it sends.
 struct OutgoingFrame {
-    mwb::frame::FrameHeader header{};
-    SharedFrameBytes payload;
+    SharedFrameBytes payload;  // tightly packed NV12 of width × height
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint32_t flags = 0;   // frame::kFlagPlaceholder or 0
+    std::uint64_t seq = 0;
+    std::uint64_t producerQpc100ns = 0;
 };
 
 // Cumulative counters reported in the hub's "stats" events.

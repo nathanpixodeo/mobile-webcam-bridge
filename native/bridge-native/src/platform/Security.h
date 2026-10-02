@@ -31,8 +31,9 @@ private:
 // are denied explicitly.
 [[nodiscard]] std::wstring PrivatePipeSddl(std::wstring_view userSid);
 
-// SDDL of the public frame pipe (protocol/FRAME_PIPE.md §2): as PrivatePipeSddl, plus read-only
-// access for LocalService, the account of the Windows Camera Frame Server.
+// SDDL of the public frame pipe (protocol/FRAME_PIPE.md §3): as PrivatePipeSddl, plus read and
+// write-data access (for the subscription) for LocalService, the account of the Windows Camera
+// Frame Server.
 [[nodiscard]] std::wstring PublicFramePipeSddl(std::wstring_view userSid);
 
 }  // namespace mwb::native

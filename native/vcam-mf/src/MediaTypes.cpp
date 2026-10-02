@@ -2,6 +2,8 @@
 
 #include "MediaTypes.h"
 
+#include <algorithm>
+
 namespace mwb::vcam {
 
 namespace {
@@ -26,6 +28,8 @@ HRESULT CreateMediaType(const frame::VideoMode& mode, OutputFormat format, IMFMe
 
     const FormatTraits traits = TraitsOf(format);
     const UINT32 sampleSize = mode.width * mode.height * traits.bitsPerPixel / 8;
+    // 64-bit: raw 4K YUY2 at 30 fps is ~4 Gbit/s, more than a UINT32 holds at 60 fps.
+    const UINT64 bitrate = UINT64{sampleSize} * 8 * mode.fpsNum / mode.fpsDen;
 
     wil::com_ptr_nothrow<IMFMediaType> type;
     RETURN_IF_FAILED(MFCreateMediaType(&type));
@@ -39,7 +43,7 @@ HRESULT CreateMediaType(const frame::VideoMode& mode, OutputFormat format, IMFMe
     RETURN_IF_FAILED(type->SetUINT32(MF_MT_FIXED_SIZE_SAMPLES, TRUE));
     RETURN_IF_FAILED(type->SetUINT32(MF_MT_SAMPLE_SIZE, sampleSize));
     RETURN_IF_FAILED(type->SetUINT32(MF_MT_DEFAULT_STRIDE, mode.width * traits.strideMultiplier));
-    RETURN_IF_FAILED(type->SetUINT32(MF_MT_AVG_BITRATE, sampleSize * 8 * mode.fpsNum / mode.fpsDen));
+    RETURN_IF_FAILED(type->SetUINT32(MF_MT_AVG_BITRATE, static_cast<UINT32>(std::min<UINT64>(bitrate, UINT32_MAX))));
 
     // BT.709, limited range — what the hub delivers (protocol/FRAME_PIPE.md).
     RETURN_IF_FAILED(type->SetUINT32(MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709));
@@ -51,16 +55,23 @@ HRESULT CreateMediaType(const frame::VideoMode& mode, OutputFormat format, IMFMe
     return S_OK;
 }
 
-HRESULT CreateMediaTypes(const frame::VideoMode& mode,
-                         std::array<wil::com_ptr_nothrow<IMFMediaType>, kMediaTypeCount>& types) noexcept {
-    RETURN_IF_FAILED(CreateMediaType(mode, OutputFormat::Nv12, types[0].put()));
-    RETURN_IF_FAILED(CreateMediaType(mode, OutputFormat::Yuy2, types[1].put()));
+HRESULT CreateMediaTypes(const frame::ModeList& modes, std::vector<wil::com_ptr_nothrow<IMFMediaType>>& types) noexcept try {
+    types.clear();
+    types.reserve(modes.size() * 2);
+    for (const frame::VideoMode& mode : modes) {
+        for (const OutputFormat format : {OutputFormat::Nv12, OutputFormat::Yuy2}) {
+            wil::com_ptr_nothrow<IMFMediaType> type;
+            RETURN_IF_FAILED(CreateMediaType(mode, format, type.put()));
+            types.push_back(std::move(type));
+        }
+    }
     return S_OK;
 }
+CATCH_RETURN()
 
-HRESULT ResolveOutputFormat(IMFMediaType* mediaType, const frame::VideoMode& mode, OutputFormat* format) noexcept {
+HRESULT ResolveMediaType(IMFMediaType* mediaType, const frame::ModeList& modes, ResolvedType* resolved) noexcept {
     RETURN_HR_IF_NULL(E_POINTER, mediaType);
-    RETURN_HR_IF_NULL(E_POINTER, format);
+    RETURN_HR_IF_NULL(E_POINTER, resolved);
 
     GUID majorType{};
     GUID subtype{};
@@ -69,13 +80,19 @@ HRESULT ResolveOutputFormat(IMFMediaType* mediaType, const frame::VideoMode& mod
     RETURN_IF_FAILED(mediaType->GetGUID(MF_MT_MAJOR_TYPE, &majorType));
     RETURN_IF_FAILED(mediaType->GetGUID(MF_MT_SUBTYPE, &subtype));
     RETURN_IF_FAILED(MFGetAttributeSize(mediaType, MF_MT_FRAME_SIZE, &width, &height));
+    UINT32 fpsNum = 0;
+    UINT32 fpsDen = 0;
+    if (FAILED(MFGetAttributeRatio(mediaType, MF_MT_FRAME_RATE, &fpsNum, &fpsDen))) {
+        fpsNum = fpsDen = 0;  // unspecified: the first advertised mode of that size
+    }
 
     RETURN_HR_IF(MF_E_INVALIDMEDIATYPE, majorType != MFMediaType_Video);
-    RETURN_HR_IF(MF_E_INVALIDMEDIATYPE, width != mode.width || height != mode.height);
+    const std::optional<frame::VideoMode> mode = frame::FindMode(modes, width, height, fpsNum, fpsDen);
+    RETURN_HR_IF(MF_E_INVALIDMEDIATYPE, !mode.has_value());
     if (subtype == MFVideoFormat_NV12) {
-        *format = OutputFormat::Nv12;
+        *resolved = ResolvedType{*mode, OutputFormat::Nv12};
     } else if (subtype == MFVideoFormat_YUY2) {
-        *format = OutputFormat::Yuy2;
+        *resolved = ResolvedType{*mode, OutputFormat::Yuy2};
     } else {
         return MF_E_INVALIDMEDIATYPE;
     }

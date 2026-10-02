@@ -35,12 +35,19 @@ std::optional<CameraRegistration> ProductRegistry::ReadCamera() const {
     CameraRegistration camera;
     camera.backend = *backend;
     camera.friendlyName = key->GetString(L"FriendlyName").value_or(mwb::ids::kDefaultFriendlyName);
-    camera.mode.width = key->GetDword(L"Width").value_or(0);
-    camera.mode.height = key->GetDword(L"Height").value_or(0);
-    camera.mode.fpsNum = key->GetDword(L"FpsNum").value_or(0);
-    camera.mode.fpsDen = key->GetDword(L"FpsDen").value_or(0);
+    camera.defaultMode.width = key->GetDword(L"Width").value_or(0);
+    camera.defaultMode.height = key->GetDword(L"Height").value_or(0);
+    camera.defaultMode.fpsNum = key->GetDword(L"FpsNum").value_or(0);
+    camera.defaultMode.fpsDen = key->GetDword(L"FpsDen").value_or(0);
+    // Installations from before the cap advertise only their single mode.
+    camera.cap.maxWidth = key->GetDword(L"MaxWidth").value_or(camera.defaultMode.width);
+    camera.cap.maxHeight = key->GetDword(L"MaxHeight").value_or(camera.defaultMode.height);
+    camera.cap.maxFps = key->GetDword(L"MaxFps").value_or(camera.defaultMode.fpsNum);
     camera.pipeName = key->GetString(L"PipeName").value_or(mwb::frame::kDefaultPublicPipeName);
-    if (!mwb::frame::IsSupportedMode(camera.mode) || !IsValidPipeName(camera.pipeName)) return std::nullopt;
+    if (!mwb::frame::IsValidCap(camera.cap) || !mwb::frame::IsAdvertised(camera.cap, camera.defaultMode) ||
+        !IsValidPipeName(camera.pipeName)) {
+        return std::nullopt;
+    }
     return camera;
 }
 
@@ -55,10 +62,13 @@ void ProductRegistry::WriteCamera(const CameraRegistration& camera) const {
     const std::string_view backend = ToString(camera.backend);
     key.SetString(L"Backend", std::wstring(backend.begin(), backend.end()));
     key.SetString(L"FriendlyName", camera.friendlyName);
-    key.SetDword(L"Width", camera.mode.width);
-    key.SetDword(L"Height", camera.mode.height);
-    key.SetDword(L"FpsNum", camera.mode.fpsNum);
-    key.SetDword(L"FpsDen", camera.mode.fpsDen);
+    key.SetDword(L"Width", camera.defaultMode.width);
+    key.SetDword(L"Height", camera.defaultMode.height);
+    key.SetDword(L"FpsNum", camera.defaultMode.fpsNum);
+    key.SetDword(L"FpsDen", camera.defaultMode.fpsDen);
+    key.SetDword(L"MaxWidth", camera.cap.maxWidth);
+    key.SetDword(L"MaxHeight", camera.cap.maxHeight);
+    key.SetDword(L"MaxFps", camera.cap.maxFps);
     key.SetString(L"PipeName", camera.pipeName);
 }
 

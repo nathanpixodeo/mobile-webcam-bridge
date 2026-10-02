@@ -37,8 +37,7 @@ DWORD ToWaitMilliseconds(LONGLONG duration100ns) noexcept {
 VCamPin::VCamPin(HRESULT* result, VCamFilter* filter, const um::CameraSettings& settings)
     : CSourceStream(NAME("MobileWebcamBridge Capture Pin"), result, filter, L"Capture"),
       settings_(settings),
-      catalog_(settings.mode),
-      placeholder_(settings.mode.width, settings.mode.height, settings.mode.fpsNum / settings.mode.fpsDen) {}
+      catalog_(settings.AdvertisedModes()) {}
 
 VCamPin::~VCamPin() = default;
 
@@ -69,7 +68,7 @@ HRESULT VCamPin::CheckMediaType(const CMediaType* mediaType) {
 HRESULT VCamPin::GetMediaType(int position, CMediaType* mediaType) {
     CheckPointer(mediaType, E_POINTER);
     if (position < 0) return E_INVALIDARG;
-    if (position >= FormatCatalog::kCount) return VFW_S_NO_MORE_ITEMS;
+    if (position >= catalog_.Count()) return VFW_S_NO_MORE_ITEMS;
 
     CAutoLock lock(m_pFilter->pStateLock());
     // The preferred entry first, then the remaining entries in catalog order.
@@ -79,14 +78,14 @@ HRESULT VCamPin::GetMediaType(int position, CMediaType* mediaType) {
 
 HRESULT VCamPin::SetMediaType(const CMediaType* mediaType) {
     CheckPointer(mediaType, E_POINTER);
-    const std::optional<PixelFormat> format = catalog_.Match(*mediaType);
-    if (!format) return VFW_E_TYPE_NOT_ACCEPTED;
+    const std::optional<CatalogEntry> entry = catalog_.Match(*mediaType);
+    if (!entry) return VFW_E_TYPE_NOT_ACCEPTED;
 
     CAutoLock lock(&formatLock_);
     const HRESULT hr = CSourceStream::SetMediaType(mediaType);
     if (FAILED(hr)) return hr;
     const auto* info = reinterpret_cast<const VIDEOINFOHEADER*>(mediaType->Format());
-    negotiated_ = NegotiatedFormat{*format, static_cast<std::uint32_t>(info->bmiHeader.biWidth)};
+    negotiated_ = NegotiatedFormat{*entry, static_cast<std::uint32_t>(info->bmiHeader.biWidth)};
     return S_OK;
 }
 
@@ -111,7 +110,8 @@ HRESULT VCamPin::DecideBufferSize(IMemAllocator* allocator, ALLOCATOR_PROPERTIES
 
     // Two buffers: one being filled while the previous one is still downstream.
     request->cBuffers = std::max<long>(request->cBuffers, 2);
-    request->cbBuffer = static_cast<long>(FormatCatalog::ImageBytes(format.format, format.strideInPixels, catalog_.Mode().height));
+    request->cbBuffer = static_cast<long>(
+        FormatCatalog::ImageBytes(format.entry.format, format.strideInPixels, format.entry.mode.height));
     if (request->cbAlign <= 0) request->cbAlign = 1;
 
     ALLOCATOR_PROPERTIES actual{};
@@ -123,9 +123,12 @@ HRESULT VCamPin::DecideBufferSize(IMemAllocator* allocator, ALLOCATOR_PROPERTIES
 // ---- Streaming (worker thread) ----
 
 HRESULT VCamPin::OnThreadCreate() {
+    streamMode_ = CurrentFormat().entry.mode;
     try {
-        placeholderFrame_.resize(placeholder_.FrameBytes());
-        receiver_ = std::make_unique<um::PipeFrameReceiver>(settings_.pipeName, settings_.mode);
+        placeholder_ = std::make_unique<um::PlaceholderGenerator>(streamMode_.width, streamMode_.height,
+                                                                  streamMode_.fpsNum / streamMode_.fpsDen);
+        placeholderFrame_.resize(placeholder_->FrameBytes());
+        receiver_ = std::make_unique<um::PipeFrameReceiver>(settings_.pipeName, streamMode_);
     } catch (...) {
         return E_OUTOFMEMORY;
     }
@@ -143,7 +146,7 @@ HRESULT VCamPin::OnThreadCreate() {
     // The caller (CSourceStream::Active) holds the filter state lock while we run, so reading
     // the IAMPushSource offset here is synchronised; the worker uses this snapshot afterwards.
     streamOffsetSnapshot_ = streamOffset_;
-    lastDelivery_ = Now100ns() - catalog_.FrameInterval();
+    lastDelivery_ = Now100ns() - FormatCatalog::FrameInterval(streamMode_);
     syntheticTime_ = 0;
     lastStart_ = -1;
     discontinuity_ = true;
@@ -161,7 +164,7 @@ HRESULT VCamPin::OnThreadDestroy() {
 }
 
 void VCamPin::WaitForNextFrame() {
-    const REFERENCE_TIME interval = catalog_.FrameInterval();
+    const REFERENCE_TIME interval = FormatCatalog::FrameInterval(streamMode_);
     const REFERENCE_TIME minInterval = interval * 2 / 3;  // at most 1.5 × the nominal rate
     for (;;) {
         const LONGLONG now = Now100ns();
@@ -189,7 +192,7 @@ const std::uint8_t* VCamPin::CurrentFrame() {
             return frame.nv12.data();
         }
     }
-    placeholder_.Render(placeholderIndex_++, placeholderFrame_.data());
+    placeholder_->Render(placeholderIndex_++, placeholderFrame_.data());
     return placeholderFrame_.data();
 }
 
@@ -199,13 +202,15 @@ void VCamPin::AdoptDynamicFormatChange(IMediaSample* sample) {
     if (sample->GetMediaType(&proposed) != S_OK || proposed == nullptr) return;
     CMediaType mediaType(*proposed);
     DeleteMediaType(proposed);
-    if (FAILED(SetMediaType(&mediaType))) {
+    // Only the stride may change while streaming: the receiver is subscribed to streamMode_.
+    const std::optional<CatalogEntry> entry = catalog_.Match(mediaType);
+    if (!entry || !(entry->mode == streamMode_) || FAILED(SetMediaType(&mediaType))) {
         um::trace::Write(um::trace::Level::Warning, L"Ignoring unsupported dynamic format change");
     }
 }
 
 void VCamPin::Timestamp(IMediaSample* sample) {
-    const REFERENCE_TIME interval = catalog_.FrameInterval();
+    const REFERENCE_TIME interval = FormatCatalog::FrameInterval(streamMode_);
     REFERENCE_TIME start = syntheticTime_;
 
     // While running with a clock, stamp with the stream time of capture, like a real camera.
@@ -228,17 +233,18 @@ HRESULT VCamPin::FillBuffer(IMediaSample* sample) {
     WaitForNextFrame();
 
     const NegotiatedFormat format = CurrentFormat();
-    const std::uint32_t height = catalog_.Mode().height;
-    const std::size_t stride = FormatCatalog::StrideBytes(format.format, format.strideInPixels);
-    const std::size_t imageBytes = FormatCatalog::ImageBytes(format.format, format.strideInPixels, height);
+    const std::uint32_t height = streamMode_.height;
+    const PixelFormat pixelFormat = format.entry.format;
+    const std::size_t stride = FormatCatalog::StrideBytes(pixelFormat, format.strideInPixels);
+    const std::size_t imageBytes = FormatCatalog::ImageBytes(pixelFormat, format.strideInPixels, height);
 
     BYTE* data = nullptr;
     HRESULT hr = sample->GetPointer(&data);
     if (FAILED(hr)) return hr;
     if (data == nullptr || static_cast<std::size_t>(sample->GetSize()) < imageBytes) return E_UNEXPECTED;
 
-    const um::color::Nv12Image source = um::color::PackedNv12(CurrentFrame(), catalog_.Mode().width, height);
-    switch (format.format) {
+    const um::color::Nv12Image source = um::color::PackedNv12(CurrentFrame(), streamMode_.width, height);
+    switch (pixelFormat) {
         case PixelFormat::Yuy2: um::color::Nv12ToYuy2(source, data, stride); break;
         case PixelFormat::Nv12: um::color::CopyNv12(source, data, stride); break;
         case PixelFormat::I420: um::color::Nv12ToI420(source, data, stride); break;
@@ -262,9 +268,9 @@ STDMETHODIMP VCamPin::SetFormat(AM_MEDIA_TYPE* mediaType) {
         preferredIndex_ = 0;
         return S_OK;
     }
-    const std::optional<PixelFormat> format = catalog_.Match(*mediaType);
-    if (!format) return VFW_E_INVALIDMEDIATYPE;
-    preferredIndex_ = FormatCatalog::IndexOf(*format);
+    const std::optional<CatalogEntry> entry = catalog_.Match(*mediaType);
+    if (!entry) return VFW_E_INVALIDMEDIATYPE;
+    preferredIndex_ = catalog_.IndexOf(*entry);
 
     if (!IsConnected()) return S_OK;  // used on the next connection
     if (CopyConnectionType() == CMediaType(*mediaType)) return S_OK;
@@ -294,7 +300,7 @@ STDMETHODIMP VCamPin::GetFormat(AM_MEDIA_TYPE** mediaType) {
 STDMETHODIMP VCamPin::GetNumberOfCapabilities(int* count, int* size) {
     CheckPointer(count, E_POINTER);
     CheckPointer(size, E_POINTER);
-    *count = FormatCatalog::kCount;
+    *count = catalog_.Count();
     *size = sizeof(VIDEO_STREAM_CONFIG_CAPS);
     return S_OK;
 }
@@ -303,7 +309,7 @@ STDMETHODIMP VCamPin::GetStreamCaps(int index, AM_MEDIA_TYPE** mediaType, BYTE* 
     CheckPointer(mediaType, E_POINTER);
     CheckPointer(caps, E_POINTER);
     if (index < 0) return E_INVALIDARG;
-    if (index >= FormatCatalog::kCount) return S_FALSE;
+    if (index >= catalog_.Count()) return S_FALSE;
 
     CMediaType entry;
     const HRESULT hr = catalog_.GetMediaType(index, &entry);
@@ -344,7 +350,8 @@ STDMETHODIMP VCamPin::QuerySupported(REFGUID propertySet, DWORD propertyId, DWOR
 
 STDMETHODIMP VCamPin::GetLatency(REFERENCE_TIME* latency) {
     CheckPointer(latency, E_POINTER);
-    *latency = catalog_.FrameInterval();
+    const NegotiatedFormat format = CurrentFormat();
+    *latency = FormatCatalog::FrameInterval(format.strideInPixels != 0 ? format.entry.mode : catalog_.DefaultMode());
     return S_OK;
 }
 

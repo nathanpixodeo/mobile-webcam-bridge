@@ -10,7 +10,10 @@ namespace mwb::vcam {
 
 namespace {
 // Samples the allocator keeps in its pool: enough for the Frame Server fan-out plus slack.
-constexpr DWORD kSamplePoolSize = 10;
+// Samples are 0.3-17 MB; fewer of the largest keep Frame Server's footprint reasonable.
+constexpr DWORD SamplePoolSize(const frame::VideoMode& mode) noexcept {
+    return mode.width * mode.height > 1920u * 1080u ? 5 : 10;
+}
 }  // namespace
 
 MediaStream::~MediaStream() {
@@ -27,15 +30,19 @@ HRESULT MediaStream::RuntimeClassInitialize(IMFMediaSource* parent, DWORD stream
     id_ = streamId;
     settings_ = settings;
 
-    std::array<wil::com_ptr_nothrow<IMFMediaType>, kMediaTypeCount> types;
-    RETURN_IF_FAILED(CreateMediaTypes(settings_.mode, types));
+    modes_ = settings_.AdvertisedModes();
+    std::vector<wil::com_ptr_nothrow<IMFMediaType>> types;
+    RETURN_IF_FAILED(CreateMediaTypes(modes_, types));
+    RETURN_HR_IF(E_UNEXPECTED, types.empty());
 
     RETURN_IF_FAILED(MFCreateAttributes(&attributes_, 4));
     RETURN_IF_FAILED(SetStreamAttributes(attributes_.get()));
     RETURN_IF_FAILED(MFCreateEventQueue(&eventQueue_));
 
-    IMFMediaType* rawTypes[kMediaTypeCount] = {types[0].get(), types[1].get()};
-    RETURN_IF_FAILED(MFCreateStreamDescriptor(id_, static_cast<DWORD>(kMediaTypeCount), rawTypes, &descriptor_));
+    std::vector<IMFMediaType*> rawTypes;
+    rawTypes.reserve(types.size());
+    for (const wil::com_ptr_nothrow<IMFMediaType>& type : types) rawTypes.push_back(type.get());
+    RETURN_IF_FAILED(MFCreateStreamDescriptor(id_, static_cast<DWORD>(rawTypes.size()), rawTypes.data(), &descriptor_));
 
     wil::com_ptr_nothrow<IMFMediaTypeHandler> handler;
     RETURN_IF_FAILED(descriptor_->GetMediaTypeHandler(&handler));
@@ -198,13 +205,14 @@ HRESULT MediaStream::GetAttributes(IMFAttributes** attributes) noexcept {
 
 HRESULT MediaStream::StartRequiresLock(IMFMediaType* newMediaType, bool sendEvent) noexcept try {
     if (newMediaType != nullptr) {
-        OutputFormat format{};
-        RETURN_IF_FAILED(ResolveOutputFormat(newMediaType, settings_.mode, &format));
+        ResolvedType resolved{};
+        RETURN_IF_FAILED(ResolveMediaType(newMediaType, modes_, &resolved));
         BOOL same = FALSE;
         if (!mediaType_ || FAILED(mediaType_->Compare(newMediaType, MF_ATTRIBUTES_MATCH_ALL_ITEMS, &same)) || !same) {
             StopRequiresLock();  // format change: tear the pipeline down and rebuild below
             mediaType_ = newMediaType;
-            format_ = format;
+            mode_ = resolved.mode;
+            format_ = resolved.format;
         }
     }
     if (!mediaType_) {
@@ -212,7 +220,10 @@ HRESULT MediaStream::StartRequiresLock(IMFMediaType* newMediaType, bool sendEven
         wil::com_ptr_nothrow<IMFMediaTypeHandler> handler;
         RETURN_IF_FAILED(descriptor_->GetMediaTypeHandler(&handler));
         RETURN_IF_FAILED(handler->GetCurrentMediaType(&mediaType_));
-        RETURN_IF_FAILED(ResolveOutputFormat(mediaType_.get(), settings_.mode, &format_));
+        ResolvedType resolved{};
+        RETURN_IF_FAILED(ResolveMediaType(mediaType_.get(), modes_, &resolved));
+        mode_ = resolved.mode;
+        format_ = resolved.format;
     }
 
     if (!delivery_) {
@@ -221,21 +232,21 @@ HRESULT MediaStream::StartRequiresLock(IMFMediaType* newMediaType, bool sendEven
             RETURN_IF_FAILED(MFCreateVideoSampleAllocatorEx(IID_PPV_ARGS(&allocator_)));
         }
         if (!allocatorInitialized_) {
-            RETURN_IF_FAILED(allocator_->InitializeSampleAllocator(kSamplePoolSize, mediaType_.get()));
+            RETURN_IF_FAILED(allocator_->InitializeSampleAllocator(SamplePoolSize(mode_), mediaType_.get()));
             allocatorInitialized_ = true;
         }
 
         auto delivery = std::make_unique<FrameDelivery>(DeliveryConfig{
             .eventQueue = eventQueue_,
             .allocator = allocator_,
-            .mode = settings_.mode,
+            .mode = mode_,
             .format = format_,
             .pipeName = settings_.pipeName,
         });
         RETURN_IF_FAILED(delivery->Start());
         delivery_ = std::move(delivery);
-        um::trace::Writef(um::trace::Level::Info, L"Stream started: {}x{}@{} {}", settings_.mode.width, settings_.mode.height,
-                      settings_.mode.fpsNum, format_ == OutputFormat::Nv12 ? L"NV12" : L"YUY2");
+        um::trace::Writef(um::trace::Level::Info, L"Stream started: {}x{}@{} {}", mode_.width, mode_.height, mode_.fpsNum,
+                          format_ == OutputFormat::Nv12 ? L"NV12" : L"YUY2");
     }
     delivery_->SetPaused(false);
 

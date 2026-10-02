@@ -1,4 +1,5 @@
-// The single video stream of the virtual camera source.
+// The single video stream of the virtual camera source. It offers every advertised mode and
+// subscribes to the hub with the one the pipeline selected.
 //
 // State semantics follow Microsoft's Windows-Camera VirtualCamera sample (SimpleMediaStream):
 // Start() from the source sends MEStreamStarted, SetStreamState() switches without events, and a
@@ -62,6 +63,8 @@ private:
 
     DWORD id_ = 0;
     um::CameraSettings settings_;
+    frame::ModeList modes_;     // advertised, in the descriptor's order
+    frame::VideoMode mode_{};   // of the current media type
     bool shutdown_ = false;
     MF_STREAM_STATE state_ = MF_STREAM_STATE_STOPPED;
 

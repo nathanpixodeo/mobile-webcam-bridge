@@ -52,18 +52,18 @@ PlaceholderStore::PlaceholderStore(std::uint32_t width, std::uint32_t height) {
     const std::size_t lumaBytes = static_cast<std::size_t>(width) * height;
     FrameBytes neutral(mwb::frame::Nv12FrameBytes(width, height), kNeutralChroma);
     std::fill_n(neutral.begin(), lumaBytes, kNeutralLuma);
-    neutral_ = std::make_shared<const FrameBytes>(std::move(neutral));
+    neutral_ = PlaceholderFrame{std::make_shared<const FrameBytes>(std::move(neutral)), width, height};
 }
 
-void PlaceholderStore::Set(PlaceholderKind kind, FrameBytes frame) {
-    frames_[Index(kind)] = std::make_shared<const FrameBytes>(std::move(frame));
+void PlaceholderStore::Set(PlaceholderKind kind, FrameBytes frame, std::uint32_t width, std::uint32_t height) {
+    frames_[Index(kind)] = PlaceholderFrame{std::make_shared<const FrameBytes>(std::move(frame)), width, height};
 }
 
-SharedFrameBytes PlaceholderStore::Get(PlaceholderKind kind) const {
-    const SharedFrameBytes& frame = frames_[Index(kind)];
-    return frame ? frame : neutral_;
+const PlaceholderFrame& PlaceholderStore::Get(PlaceholderKind kind) const {
+    const PlaceholderFrame& frame = frames_[Index(kind)];
+    return frame.bytes ? frame : neutral_;
 }
 
-bool PlaceholderStore::IsLoaded(PlaceholderKind kind) const noexcept { return frames_[Index(kind)] != nullptr; }
+bool PlaceholderStore::IsLoaded(PlaceholderKind kind) const noexcept { return frames_[Index(kind)].bytes != nullptr; }
 
 }  // namespace mwb::native

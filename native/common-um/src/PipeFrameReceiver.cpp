@@ -74,10 +74,10 @@ bool PipeFrameReceiver::StopRequested(DWORD waitMilliseconds) const noexcept {
 }
 
 wil::unique_hfile PipeFrameReceiver::Connect() const noexcept {
-    // GENERIC_READ only: the hub's DACL grants LocalService (Frame Server) read access and nothing
-    // more. SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS stops the pipe server from impersonating
-    // this (possibly privileged) client.
-    return wil::unique_hfile(CreateFileW(pipePath_.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING,
+    // GENERIC_READ plus FILE_WRITE_DATA for the subscription: exactly what the hub's DACL grants
+    // LocalService (Frame Server). SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS stops the pipe server
+    // from impersonating this (possibly privileged) client.
+    return wil::unique_hfile(CreateFileW(pipePath_.c_str(), GENERIC_READ | FILE_WRITE_DATA, 0, nullptr, OPEN_EXISTING,
                                          FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS,
                                          nullptr));
 }
@@ -119,6 +119,11 @@ void PipeFrameReceiver::Run() noexcept {
 }
 
 PipeFrameReceiver::SessionEnd PipeFrameReceiver::ReceiveFrames(HANDLE pipe) noexcept {
+    const frame::SubscribeRequest request = frame::MakeSubscribeRequest(mode_);
+    if (!WriteExact(pipe, &request, sizeof(request))) {
+        return StopRequested(0) ? SessionEnd::Stopped : SessionEnd::Disconnected;
+    }
+
     for (;;) {
         frame::FrameHeader header{};
         if (!ReadExact(pipe, &header, sizeof(header))) {
@@ -151,7 +156,6 @@ PipeFrameReceiver::SessionEnd PipeFrameReceiver::ReceiveFrames(HANDLE pipe) noex
 bool PipeFrameReceiver::ReadExact(HANDLE pipe, void* destination, std::uint32_t length) noexcept {
     auto* cursor = static_cast<std::uint8_t*>(destination);
     std::uint32_t remaining = length;
-    const HANDLE waits[] = {ioEvent_.get(), stopEvent_.get()};
 
     while (remaining > 0) {
         OVERLAPPED overlapped{};
@@ -163,25 +167,50 @@ bool PipeFrameReceiver::ReadExact(HANDLE pipe, void* destination, std::uint32_t 
             if (error != ERROR_IO_PENDING && error != ERROR_MORE_DATA) return false;
         }
 
-        if (WaitForMultipleObjects(ARRAYSIZE(waits), waits, FALSE, INFINITE) != WAIT_OBJECT_0) {
-            // Stop requested (or wait failure): cancel and wait for the cancellation to land, since
-            // `overlapped` lives on this stack frame.
-            CancelIoEx(pipe, &overlapped);
-            DWORD ignored = 0;
-            GetOverlappedResult(pipe, &overlapped, &ignored, TRUE);
-            return false;
-        }
-
         DWORD transferred = 0;
-        if (!GetOverlappedResult(pipe, &overlapped, &transferred, FALSE) && GetLastError() != ERROR_MORE_DATA) {
-            return false;  // ERROR_BROKEN_PIPE when the hub goes away
-        }
-        if (transferred == 0) return false;
-
+        if (!Complete(pipe, overlapped, &transferred)) return false;
         cursor += transferred;
         remaining -= transferred;
     }
     return true;
+}
+
+bool PipeFrameReceiver::WriteExact(HANDLE pipe, const void* source, std::uint32_t length) noexcept {
+    const auto* cursor = static_cast<const std::uint8_t*>(source);
+    std::uint32_t remaining = length;
+
+    while (remaining > 0) {
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = ioEvent_.get();
+        ioEvent_.ResetEvent();
+
+        if (!WriteFile(pipe, cursor, remaining, nullptr, &overlapped) && GetLastError() != ERROR_IO_PENDING) {
+            return false;
+        }
+
+        DWORD transferred = 0;
+        if (!Complete(pipe, overlapped, &transferred)) return false;
+        cursor += transferred;
+        remaining -= transferred;
+    }
+    return true;
+}
+
+bool PipeFrameReceiver::Complete(HANDLE pipe, OVERLAPPED& overlapped, DWORD* transferred) noexcept {
+    const HANDLE waits[] = {ioEvent_.get(), stopEvent_.get()};
+    if (WaitForMultipleObjects(ARRAYSIZE(waits), waits, FALSE, INFINITE) != WAIT_OBJECT_0) {
+        // Stop requested (or wait failure): cancel and wait for the cancellation to land, since
+        // `overlapped` lives on the caller's stack frame.
+        CancelIoEx(pipe, &overlapped);
+        DWORD ignored = 0;
+        GetOverlappedResult(pipe, &overlapped, &ignored, TRUE);
+        return false;
+    }
+
+    if (!GetOverlappedResult(pipe, &overlapped, transferred, FALSE) && GetLastError() != ERROR_MORE_DATA) {
+        return false;  // ERROR_BROKEN_PIPE when the hub goes away
+    }
+    return *transferred != 0;
 }
 
 }  // namespace mwb::um

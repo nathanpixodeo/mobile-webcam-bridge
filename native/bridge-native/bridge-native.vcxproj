@@ -42,7 +42,7 @@
       <!-- NTDDI_VERSION comes from UserMode.props. MFCreateVirtualCamera and DiUninstallDriverW are
            resolved at run time, so the executable still starts on Windows 10. -->
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NOMINMAX;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)src;$(MSBuildThisFileDirectory)..\common-um\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -103,6 +103,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="bridge-native.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Nv12Scaler for the video hub (static library; only the referenced objects are linked). -->
+    <ProjectReference Include="..\common-um\common-um.vcxproj">
+      <Project>{AB860889-3A50-4C75-BE0E-C88E32464327}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -22,11 +22,6 @@ namespace {
     throw ErrorFromWin32(result.error, "Reading frames failed after " + std::to_string(received) + " frames");
 }
 
-bool IsPlausibleSize(std::uint32_t width, std::uint32_t height) noexcept {
-    return width > 0 && height > 0 && width <= mwb::frame::kMaxWidth && height <= mwb::frame::kMaxHeight &&
-           width % 2 == 0 && height % 2 == 0;
-}
-
 }  // namespace
 
 WatchReport FrameWatcher::Run() const {
@@ -39,7 +34,7 @@ WatchReport FrameWatcher::Run() const {
     };
 
     DWORD error = ERROR_SUCCESS;
-    const wil::unique_handle pipe = OpenPipeClient(path, GENERIC_READ, settings_.timeoutMs, error);
+    const wil::unique_handle pipe = OpenPipeClient(path, GENERIC_READ | FILE_WRITE_DATA, settings_.timeoutMs, error);
     if (!pipe) {
         if (error == ERROR_FILE_NOT_FOUND) {
             throw CommandError(ErrorCode::IoError, "No video hub is running (" + ToUtf8(path) + " not found)");
@@ -48,25 +43,22 @@ WatchReport FrameWatcher::Run() const {
     }
 
     WatchReport report;
-    if (settings_.expectedMode) {
-        report.width = settings_.expectedMode->width;
-        report.height = settings_.expectedMode->height;
-    }
+    report.width = settings_.mode.width;
+    report.height = settings_.mode.height;
 
     OverlappedOperation operation;
+    const mwb::frame::SubscribeRequest request = mwb::frame::MakeSubscribeRequest(settings_.mode);
+    const IoResult subscribed = WriteAll(pipe.get(), operation, &request, sizeof(request), nullptr, remaining());
+    if (subscribed.status != IoStatus::Completed) {
+        throw ErrorFromWin32(subscribed.error, "Cannot subscribe to " + ToUtf8(path));
+    }
+
     std::vector<std::uint8_t> payload;
     while (report.frames < settings_.frames) {
         mwb::frame::FrameHeader header{};
         IoResult result = ReadExactly(pipe.get(), operation, &header, sizeof(header), nullptr, remaining());
         if (result.status != IoStatus::Completed) ThrowRead(result, report.frames, settings_.frames);
 
-        if (report.width == 0) {  // no installed mode: adopt the first frame's size
-            if (!IsPlausibleSize(header.width, header.height)) {
-                throw CommandError(ErrorCode::IoError, "First frame has an implausible size");
-            }
-            report.width = header.width;
-            report.height = header.height;
-        }
         const mwb::frame::ValidationError validation = mwb::frame::Validate(header, report.width, report.height);
         if (validation != mwb::frame::ValidationError::None) {
             throw CommandError(ErrorCode::IoError, std::string("Invalid frame header: ") + mwb::frame::ToString(validation));

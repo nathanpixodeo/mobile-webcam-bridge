@@ -17,7 +17,8 @@ inline constexpr wchar_t kDShowFilterClsid[] = L"{4FE59245-46F3-4EBD-9134-54C688
 // keys). Written by `bridge-native install`, removed by `uninstall`.
 //   SOFTWARE\MobileWebcamBridge          InstallDir (REG_SZ), Version (REG_SZ)
 //   SOFTWARE\MobileWebcamBridge\Camera   Backend (REG_SZ "mf"|"dshow"), FriendlyName (REG_SZ),
-//                                  Width, Height, FpsNum, FpsDen (REG_DWORD), PipeName (REG_SZ)
+//                                  Width, Height, FpsNum, FpsDen (REG_DWORD, default mode),
+//                                  MaxWidth, MaxHeight, MaxFps (REG_DWORD, cap), PipeName (REG_SZ)
 inline constexpr wchar_t kProductRegistryKey[] = L"SOFTWARE\\MobileWebcamBridge";
 inline constexpr wchar_t kCameraRegistryKey[] = L"SOFTWARE\\MobileWebcamBridge\\Camera";
 

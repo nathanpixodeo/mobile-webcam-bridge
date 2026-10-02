@@ -42,6 +42,8 @@ std::wstring PrivatePipeSddl(std::wstring_view userSid) {
     return sddl;
 }
 
-std::wstring PublicFramePipeSddl(std::wstring_view userSid) { return PrivatePipeSddl(userSid) + L"(A;;GR;;;LS)"; }
+// LocalService (Frame Server) reads frames and writes its subscription: FILE_GENERIC_READ |
+// FILE_WRITE_DATA. Never FILE_APPEND_DATA, which on a pipe means FILE_CREATE_PIPE_INSTANCE.
+std::wstring PublicFramePipeSddl(std::wstring_view userSid) { return PrivatePipeSddl(userSid) + L"(A;;0x12008b;;;LS)"; }
 
 }  // namespace mwb::native

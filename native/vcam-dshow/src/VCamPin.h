@@ -3,7 +3,8 @@
 // Threading: FillBuffer/OnThreadCreate/OnThreadDestroy run on the CSourceStream worker thread;
 // connection and IAMStreamConfig calls run on application threads under the filter state lock.
 // The worker thread must never take the state lock (Stop holds it while waiting for the worker),
-// so the negotiated format is mirrored under the separate `formatLock_`.
+// so the negotiated format is mirrored under the separate `formatLock_`. The negotiated mode is
+// fixed for a streaming run: the worker subscribes to it when the thread starts.
 #pragma once
 
 #include "Framework.h"
@@ -66,8 +67,8 @@ protected:
 
 private:
     struct NegotiatedFormat {
-        PixelFormat format = PixelFormat::Yuy2;
-        std::uint32_t strideInPixels = 0;  // biWidth
+        CatalogEntry entry{};
+        std::uint32_t strideInPixels = 0;  // biWidth; 0 until a type is set
     };
 
     [[nodiscard]] VCamFilter* Filter() const noexcept;
@@ -87,8 +88,9 @@ private:
 
     // Worker-thread state.
     HANDLE mmcss_ = nullptr;  // MMCSS registration of the worker thread
+    frame::VideoMode streamMode_{};  // the negotiated mode, snapshotted in OnThreadCreate
     std::unique_ptr<um::PipeFrameReceiver> receiver_;
-    um::PlaceholderGenerator placeholder_;
+    std::unique_ptr<um::PlaceholderGenerator> placeholder_;
     std::vector<std::uint8_t> placeholderFrame_;
     std::uint64_t placeholderIndex_ = 0;
     LONGLONG lastDelivery_ = 0;
