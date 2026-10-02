@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include <emmintrin.h>
+
 namespace mwb::um::color {
 
 namespace {
@@ -63,12 +65,41 @@ void HorizontalRow(const std::uint8_t* source, const std::vector<Tap>& tapsX, st
     }
 }
 
-// Vertical blend of two horizontally scaled rows; a plain loop the compiler vectorises.
+// Vertical blend of two horizontally scaled rows, 16 pixels at a time with SSE2 (the x64 and the
+// Windows x86 baseline). Each row value is weighted with a 16x16 high multiply first, so the sum
+// stays within 16 bits: ((top × (256 − w)) >> 8 + (bottom × w) >> 8 + 128) >> 8.
 void VerticalRow(const std::uint16_t* top, const std::uint16_t* bottom, std::uint32_t weight, std::uint8_t* out,
                  std::size_t count) noexcept {
-    const std::uint32_t topWeight = kWeightOne - weight;
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = static_cast<std::uint8_t>((top[i] * topWeight + bottom[i] * weight + 32768u) >> 16);
+    const __m128i half = _mm_set1_epi16(128);
+    std::size_t i = 0;
+    if (weight == 0) {  // (256 − 0) << 8 does not fit 16 bits; the top row alone is the result
+        for (; i + 16 <= count; i += 16) {
+            const __m128i low = _mm_loadu_si128(reinterpret_cast<const __m128i*>(top + i));
+            const __m128i high = _mm_loadu_si128(reinterpret_cast<const __m128i*>(top + i + 8));
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(out + i),
+                             _mm_packus_epi16(_mm_srli_epi16(_mm_adds_epu16(low, half), 8),
+                                              _mm_srli_epi16(_mm_adds_epu16(high, half), 8)));
+        }
+        for (; i < count; ++i) out[i] = static_cast<std::uint8_t>((top[i] + 128u) >> 8);
+        return;
+    }
+
+    const std::uint32_t topWeight = (kWeightOne - weight) << 8;  // weight 1..255: fits 16 bits
+    const std::uint32_t bottomWeight = weight << 8;
+    const __m128i topWeights = _mm_set1_epi16(static_cast<short>(topWeight));
+    const __m128i bottomWeights = _mm_set1_epi16(static_cast<short>(bottomWeight));
+    const auto blend = [&](std::size_t offset) {
+        const __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(top + offset));
+        const __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(bottom + offset));
+        const __m128i sum = _mm_add_epi16(_mm_mulhi_epu16(a, topWeights), _mm_mulhi_epu16(b, bottomWeights));
+        return _mm_srli_epi16(_mm_adds_epu16(sum, half), 8);
+    };
+    for (; i + 16 <= count; i += 16) {
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(out + i), _mm_packus_epi16(blend(i), blend(i + 8)));
+    }
+    for (; i < count; ++i) {
+        const std::uint32_t sum = ((top[i] * topWeight) >> 16) + ((bottom[i] * bottomWeight) >> 16);
+        out[i] = static_cast<std::uint8_t>((sum + 128u) >> 8);
     }
 }
 

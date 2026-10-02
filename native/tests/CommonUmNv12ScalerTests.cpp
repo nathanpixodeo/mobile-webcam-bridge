@@ -8,7 +8,9 @@
 #include <mwb/FrameProtocol.h>
 #include <mwb/um/Nv12Scaler.h>
 
+#include <cmath>
 #include <cstdint>
+#include <tuple>
 #include <vector>
 
 namespace color = mwb::um::color;
@@ -155,4 +157,42 @@ TEST_CASE("Nv12Scaler reduces 4K to 1080p with one box pass and no bilinear blur
 
     Frame out = Scaled(src, 1920, 1080);
     for (std::uint32_t x = 0; x < 1920; x += 97) CHECK(out.Y(x, 540) == 16 + x % 200);
+}
+
+TEST_CASE("Nv12Scaler bilinear stays within two code values of an exact reference") {
+    // Exact bilinear with the same pixel-centre alignment, in floating point.
+    const auto reference = [](const std::vector<std::uint8_t>& plane, std::uint32_t srcW, std::uint32_t srcH,
+                              std::uint32_t dstW, std::uint32_t dstH, std::uint32_t x, std::uint32_t y) {
+        const auto axis = [](std::uint32_t i, std::uint32_t src, std::uint32_t dst) {
+            double position = (i + 0.5) * src / dst - 0.5;
+            if (position < 0) position = 0;
+            const auto first = static_cast<std::uint32_t>(position);
+            const std::uint32_t second = first + 1 < src ? first + 1 : first;
+            return std::tuple{first, second, position - first};
+        };
+        const auto [x0, x1, fx] = axis(x, srcW, dstW);
+        const auto [y0, y1, fy] = axis(y, srcH, dstH);
+        const auto at = [&](std::uint32_t px, std::uint32_t py) { return static_cast<double>(plane[py * srcW + px]); };
+        const double top = at(x0, y0) * (1 - fx) + at(x1, y0) * fx;
+        const double bottom = at(x0, y1) * (1 - fx) + at(x1, y1) * fx;
+        return top * (1 - fy) + bottom * fy;
+    };
+
+    Frame src(64, 36);
+    for (std::uint32_t row = 0; row < 36; ++row) {
+        for (std::uint32_t x = 0; x < 64; ++x) src.Y(x, row) = static_cast<std::uint8_t>((x * 37 + row * 91 + x * row) % 220 + 16);
+    }
+    for (std::size_t i = std::size_t{64} * 36; i < src.bytes.size(); ++i) src.bytes[i] = 128;
+    const std::vector<std::uint8_t> luma(src.bytes.begin(), src.bytes.begin() + 64 * 36);
+
+    Frame out = Scaled(src, 160, 90);
+    int worst = 0;
+    for (std::uint32_t y = 0; y < 90; ++y) {
+        for (std::uint32_t x = 0; x < 160; ++x) {
+            const double expected = reference(luma, 64, 36, 160, 90, x, y);
+            const int difference = static_cast<int>(std::lround(std::abs(out.Y(x, y) - expected)));
+            worst = difference > worst ? difference : worst;
+        }
+    }
+    CHECK(worst <= 2);
 }
