@@ -4,6 +4,7 @@ import type { Clock } from '#domain/clock.ts';
 import { MediaError, toError } from '#domain/errors.ts';
 import type { StartAudio, StartVideo } from '#domain/protocol/messages.ts';
 import { ReconnectPolicy } from '#domain/session/ReconnectPolicy.ts';
+import { bitrateKbpsFor } from '#domain/video/BitratePolicy.ts';
 import { PLACEHOLDER_KINDS } from '#domain/video/PlaceholderPolicy.ts';
 import { describeMode, framesPerSecond, type VideoMode } from '#domain/video/VideoMode.ts';
 import type { AudioSink } from '#ports/Audio.ts';
@@ -23,7 +24,11 @@ import { AdbServerLauncher, locateAdb } from '#infrastructure/adb/AdbServerLaunc
 import { AdbTunnelFactory } from '#infrastructure/adb/AdbTunnelFactory.ts';
 import type { BridgeConfig } from '#infrastructure/config/ConfigSchema.ts';
 import { FfmpegDecoderFactory } from '#infrastructure/ffmpeg/FfmpegH264Decoder.ts';
-import { FfmpegLocator, FfmpegPlaceholderRenderer } from '#infrastructure/ffmpeg/FfmpegToolchain.ts';
+import {
+  FfmpegLocator,
+  FfmpegPlaceholderRenderer,
+  PLACEHOLDER_FRAME_SIZE,
+} from '#infrastructure/ffmpeg/FfmpegToolchain.ts';
 import { InMemoryMetrics } from '#infrastructure/metrics/InMemoryMetrics.ts';
 import { BridgeNativeCli } from '#infrastructure/native/BridgeNativeCli.ts';
 import { locateBridgeNative } from '#infrastructure/native/BridgeNativeLocator.ts';
@@ -149,7 +154,10 @@ export function startVideoParams(config: BridgeConfig, mode: VideoMode): StartVi
     width: mode.width,
     height: mode.height,
     fps: Math.round(framesPerSecond(mode)),
-    bitrateKbps: config.video.bitrateKbps,
+    bitrateKbps: bitrateKbpsFor(mode, {
+      bitsPerPixel: config.video.bitsPerPixel,
+      overrideKbps: config.video.bitrateKbps,
+    }),
     camera: config.video.camera,
     mirror: config.video.mirror,
     orientation: config.video.orientation,
@@ -187,7 +195,7 @@ export async function createBridgeApp(context: AppContext, overrides: BridgeAppO
 
   const videoOutput = overrides.videoOutput ?? (await startVideoHub(context, overrides.native, resources));
   if (overrides.videoOutput !== undefined) resources.use(overrides.videoOutput);
-  logger.info('Virtual camera ready', { mode: describeMode(videoOutput.mode) });
+  logger.info('Virtual camera ready', { defaultMode: describeMode(videoOutput.defaultMode) });
 
   const audioSink =
     overrides.audioSink === undefined ? await startMicSink(context, overrides.native) : overrides.audioSink;
@@ -205,6 +213,7 @@ export async function createBridgeApp(context: AppContext, overrides: BridgeAppO
   });
   const videoPipeline = new VideoPipeline({
     output: videoOutput,
+    initialMode: videoOutput.defaultMode,
     decoders:
       overrides.decoders ??
       new FfmpegDecoderFactory({
@@ -244,8 +253,9 @@ export async function createBridgeApp(context: AppContext, overrides: BridgeAppO
     videoOutput,
     videoPipeline,
     audio,
-    streams: { video: startVideoParams(config, videoOutput.mode), audio: startAudioParams(config) },
+    streams: { video: (mode) => startVideoParams(config, mode), audio: startAudioParams(config) },
     videoStopGraceMs: config.video.stopGraceMs,
+    modeDowngradeGraceMs: config.video.modeDowngradeGraceMs,
     audioStopGraceMs: config.audio.stopGraceMs,
     metricsIntervalMs: config.logging.metricsIntervalMs,
     clock,
@@ -282,8 +292,15 @@ async function startVideoHub(
     assetsDir: AppPaths.placeholderAssetsDir(),
     cacheDir: AppPaths.placeholderCacheDir(),
     logger,
-  }).render(PLACEHOLDER_KINDS, status.camera.mode);
-  return resources.use(await VideoHubOutput.start({ executablePath: native.executablePath, logger, placeholders }));
+  }).render(PLACEHOLDER_KINDS);
+  return resources.use(
+    await VideoHubOutput.start({
+      executablePath: native.executablePath,
+      logger,
+      placeholders,
+      placeholderSize: PLACEHOLDER_FRAME_SIZE,
+    }),
+  );
 }
 
 async function startMicSink(context: AppContext, nativeOverride: NativeHelper | undefined): Promise<AudioSink | null> {

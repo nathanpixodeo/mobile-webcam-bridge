@@ -2,7 +2,7 @@ import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MediaError } from '#domain/errors.ts';
 import type { PlaceholderKind } from '#domain/video/PlaceholderPolicy.ts';
-import { nv12FrameBytes, type VideoMode } from '#domain/video/VideoMode.ts';
+import { nv12FrameBytes, type VideoSize } from '#domain/video/VideoMode.ts';
 import type { Logger } from '#ports/Logger.ts';
 import { runToCompletion } from '../process/ManagedChildProcess.ts';
 import { buildPlaceholderArgs } from './FfmpegArgsBuilder.ts';
@@ -43,9 +43,12 @@ export class FfmpegLocator {
   }
 }
 
+/** Size of the shipped placeholder PNGs, kept for the NV12 frames: the hub scales them per consumer. */
+export const PLACEHOLDER_FRAME_SIZE: VideoSize = { width: 1920, height: 1080 };
+
 /**
- * Converts the placeholder PNGs into raw NV12 frames of the camera mode, once, into a cache
- * directory (re-rendered when the PNG is newer than the cached frame).
+ * Converts the placeholder PNGs into raw NV12 frames of `PLACEHOLDER_FRAME_SIZE`, once, into a
+ * cache directory (re-rendered when the PNG is newer than the cached frame).
  */
 export class FfmpegPlaceholderRenderer {
   readonly #ffmpegPath: string;
@@ -60,14 +63,15 @@ export class FfmpegPlaceholderRenderer {
     this.#logger = options.logger;
   }
 
-  async render(kinds: readonly PlaceholderKind[], mode: VideoMode): Promise<Map<PlaceholderKind, string>> {
+  async render(kinds: readonly PlaceholderKind[]): Promise<Map<PlaceholderKind, string>> {
     await mkdir(this.#cacheDir, { recursive: true });
     const result = new Map<PlaceholderKind, string>();
+    const { width, height } = PLACEHOLDER_FRAME_SIZE;
     for (const kind of kinds) {
       const input = join(this.#assetsDir, `${kind}.png`);
-      const output = join(this.#cacheDir, `${kind}-${mode.width}x${mode.height}.nv12`);
+      const output = join(this.#cacheDir, `${kind}-${width}x${height}.nv12`);
       try {
-        if (!(await this.#isFresh(input, output, mode))) await this.#renderOne(input, output, mode);
+        if (!(await this.#isFresh(input, output))) await this.#renderOne(input, output);
         result.set(kind, output);
       } catch (error) {
         this.#logger.warn('Placeholder not available', { kind, error: (error as Error).message });
@@ -76,22 +80,20 @@ export class FfmpegPlaceholderRenderer {
     return result;
   }
 
-  async #isFresh(input: string, output: string, mode: VideoMode): Promise<boolean> {
+  async #isFresh(input: string, output: string): Promise<boolean> {
     try {
       const [source, cached] = await Promise.all([stat(input), stat(output)]);
-      return cached.size === nv12FrameBytes(mode) && cached.mtimeMs >= source.mtimeMs;
+      return cached.size === nv12FrameBytes(PLACEHOLDER_FRAME_SIZE) && cached.mtimeMs >= source.mtimeMs;
     } catch {
       return false;
     }
   }
 
-  async #renderOne(input: string, output: string, mode: VideoMode): Promise<void> {
-    const { exit } = await runToCompletion(this.#ffmpegPath, buildPlaceholderArgs({ input, mode, output }), {
-      timeoutMs: 15_000,
-      logger: this.#logger,
-    });
+  async #renderOne(input: string, output: string): Promise<void> {
+    const args = buildPlaceholderArgs({ input, mode: PLACEHOLDER_FRAME_SIZE, output });
+    const { exit } = await runToCompletion(this.#ffmpegPath, args, { timeoutMs: 15_000, logger: this.#logger });
     if (exit.code !== 0) throw new Error(`ffmpeg failed to render ${input} (exit ${exit.code})`);
-    const size = (await stat(output)).size;
-    if (size !== nv12FrameBytes(mode)) throw new Error(`rendered placeholder has ${size} bytes`);
+    const bytes = (await stat(output)).size;
+    if (bytes !== nv12FrameBytes(PLACEHOLDER_FRAME_SIZE)) throw new Error(`rendered placeholder has ${bytes} bytes`);
   }
 }

@@ -1,10 +1,12 @@
 import type { Clock } from '#domain/clock.ts';
 import { DemandTracker } from '#domain/demand/DemandTracker.ts';
 import type { DeviceStatus, StartAudio, StartVideo } from '#domain/protocol/messages.ts';
+import { ModeArbiter } from '#domain/video/ModeArbiter.ts';
+import { describeMode, type VideoMode } from '#domain/video/VideoMode.ts';
 import type { AudioSink } from '#ports/Audio.ts';
 import type { Logger } from '#ports/Logger.ts';
 import type { MetricsRegistry } from '#ports/Metrics.ts';
-import type { VideoOutput } from '#ports/Video.ts';
+import type { ConsumerDemand, VideoOutput } from '#ports/Video.ts';
 import type { AudioPipeline } from './AudioPipeline.ts';
 import type { DeviceManager } from './DeviceManager.ts';
 import type { DeviceSession } from './DeviceSession.ts';
@@ -17,8 +19,9 @@ export interface BridgeServiceDependencies {
   readonly videoOutput: VideoOutput;
   readonly videoPipeline: VideoPipeline;
   readonly audio: { readonly sink: AudioSink; readonly pipeline: AudioPipeline } | undefined;
-  readonly streams: { readonly video: StartVideo; readonly audio: StartAudio };
+  readonly streams: { readonly video: (mode: VideoMode) => StartVideo; readonly audio: StartAudio };
   readonly videoStopGraceMs: number;
+  readonly modeDowngradeGraceMs: number;
   readonly audioStopGraceMs: number;
   readonly metricsIntervalMs: number;
   readonly clock: Clock;
@@ -29,8 +32,8 @@ export interface BridgeServiceDependencies {
 }
 
 /**
- * The running bridge. Connects the demand signals (camera consumers, microphone capture) to
- * the active device session, and the session's media to the video and audio pipelines.
+ * The running bridge. Connects the demand signals (camera consumers and their modes, microphone
+ * capture) to the active device session, and the session's media to the video and audio pipelines.
  */
 export class BridgeService implements AsyncDisposable {
   readonly #deps: BridgeServiceDependencies;
@@ -38,13 +41,19 @@ export class BridgeService implements AsyncDisposable {
   readonly #coordinator: StreamCoordinator;
   readonly #videoDemand: DemandTracker;
   readonly #audioDemand: DemandTracker;
+  readonly #modeArbiter: ModeArbiter;
   #sessionSubscriptions: DisposableStack | undefined;
   #lastStatus: DeviceStatus | undefined;
 
   constructor(deps: BridgeServiceDependencies) {
     this.#deps = deps;
+    this.#modeArbiter = new ModeArbiter({
+      initial: deps.videoOutput.defaultMode,
+      downgradeGraceMs: deps.modeDowngradeGraceMs,
+      clock: deps.clock,
+    });
     this.#coordinator = new StreamCoordinator({
-      video: deps.streams.video,
+      video: deps.streams.video(this.#modeArbiter.mode),
       audio: deps.audio === undefined ? null : deps.streams.audio,
       onChange: (desired) => {
         deps.manager.activeSession?.setDesiredStreams(desired);
@@ -80,8 +89,13 @@ export class BridgeService implements AsyncDisposable {
       );
     });
     this.#subscriptions.use(
-      videoOutput.events.on('consumersChanged', (count) => {
-        this.#videoDemand.update(count);
+      this.#modeArbiter.events.on('changed', (mode) => {
+        this.#onModeChanged(mode);
+      }),
+    );
+    this.#subscriptions.use(
+      videoOutput.events.on('consumersChanged', (demand) => {
+        this.#onConsumers(demand);
       }),
     );
     if (audio !== undefined) {
@@ -115,7 +129,7 @@ export class BridgeService implements AsyncDisposable {
 
     this.#refreshPlaceholder();
     await manager.start();
-    this.#videoDemand.update(videoOutput.consumers);
+    this.#onConsumers(videoOutput.consumers);
     logger.info('Bridge running');
 
     const aborted = new Promise<void>((resolve) => {
@@ -133,12 +147,26 @@ export class BridgeService implements AsyncDisposable {
 
   async [Symbol.asyncDispose](): Promise<void> {
     this.#subscriptions.dispose();
+    this.#modeArbiter[Symbol.dispose]();
     this.#videoDemand[Symbol.dispose]();
     this.#audioDemand[Symbol.dispose]();
     await this.#deps.manager[Symbol.asyncDispose]();
     this.#sessionSubscriptions?.dispose();
     await this.#deps.videoPipeline[Symbol.asyncDispose]();
     await this.#deps.resources.disposeAsync();
+  }
+
+  #onConsumers(demand: ConsumerDemand): void {
+    // Mode first: a stream started by the demand then starts directly in the mode it needs,
+    // instead of starting in the previous mode and switching right away.
+    this.#modeArbiter.update(demand.modes);
+    this.#videoDemand.update(demand.count);
+  }
+
+  #onModeChanged(mode: VideoMode): void {
+    this.#deps.logger.info('Camera mode', { mode: describeMode(mode) });
+    this.#coordinator.setVideoParams(this.#deps.streams.video(mode));
+    this.#deps.videoPipeline.setMode(mode);
   }
 
   #attachSession(session: DeviceSession): void {

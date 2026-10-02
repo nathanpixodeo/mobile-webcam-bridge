@@ -1,4 +1,5 @@
 import { MediaError } from '#domain/errors.ts';
+import { describeMode } from '#domain/video/VideoMode.ts';
 import { createNativeHelper } from '#composition/createBridgeApp.ts';
 import type { InstallResult, NativeHelper } from '#ports/NativeHelper.ts';
 import { ExitCode, type Command, type CommandContext } from '../Command.ts';
@@ -35,6 +36,9 @@ export class InstallCommand implements Command {
     width: { type: 'string' },
     height: { type: 'string' },
     fps: { type: 'string' },
+    'max-width': { type: 'string' },
+    'max-height': { type: 'string' },
+    'max-fps': { type: 'string' },
   } as const;
 
   async run(context: CommandContext): Promise<number> {
@@ -51,6 +55,11 @@ export class InstallCommand implements Command {
         width: number('width', config.camera.width),
         height: number('height', config.camera.height),
         fps: number('fps', config.camera.fps),
+      },
+      cap: {
+        maxWidth: number('max-width', config.camera.maxWidth),
+        maxHeight: number('max-height', config.camera.maxHeight),
+        maxFps: number('max-fps', config.camera.maxFps),
       },
       friendlyName: config.camera.friendlyName,
     });
@@ -88,11 +97,14 @@ export class StatusCommand implements Command {
     const t = context.terminal;
     t.line(`Windows build ${status.osBuild}${status.isWin11 ? ' (Windows 11)' : ''}`);
     t.line(`Install folder: ${status.installDir ?? 'not installed'}`);
-    t.line(
-      status.camera.installed
-        ? `Camera: ${status.camera.friendlyName} via ${status.camera.backend}, ${status.camera.mode.width}x${status.camera.mode.height}@${status.camera.mode.fpsNum / status.camera.mode.fpsDen}`
-        : 'Camera: not installed',
-    );
+    const camera = status.camera;
+    if (camera.installed) {
+      const { maxWidth, maxHeight, maxFps } = camera.cap;
+      t.line(`Camera: ${camera.friendlyName} via ${camera.backend}, default mode ${describeMode(camera.defaultMode)}`);
+      t.line(`  Up to ${maxWidth}x${maxHeight} at ${maxFps} fps; modes: ${camera.modes.map(describeMode).join(', ')}`);
+    } else {
+      t.line('Camera: not installed');
+    }
     t.line(
       status.mic.installed
         ? `Microphone: ${status.mic.devicePresent ? 'present' : 'missing'}${status.mic.problemCode === 0 ? '' : ` (device problem code ${status.mic.problemCode})`}`

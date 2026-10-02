@@ -57,6 +57,10 @@ Open any camera app and pick **Mobile Webcam Windows Virtual Camera** (Windows 1
 **Mobile Webcam** (Windows 10); pick **Mobile Webcam Microphone** as the input device. The phone
 only streams while an app actually uses the camera or microphone.
 
+The camera offers modes from 640×360 up to 3840×2160 (15/30/60 fps, 4K up to 30 fps); each app
+picks the one it wants and the phone streams the largest mode in use, with the bitrate scaled to
+match. `install --max-width/--max-height/--max-fps` limits the list on slower PCs.
+
 ## CLI
 
 The CLI is `mobile-webcam-bridge`; from a checkout run it as `node src/main.ts <command>` in `host/`.

@@ -42,6 +42,7 @@ describe(
       return new VideoPipeline({
         output,
         decoders: new FfmpegDecoderFactory({ ffmpegPath: 'ffmpeg', hwaccel: 'none', logger: silentLogger }),
+        initialMode: MODE,
         clock: new SystemClock(),
         logger: silentLogger,
         metrics,
@@ -78,6 +79,25 @@ describe(
       await waitFor(() => output.frames >= accessUnits.length - 31, 'frames after the IDR', 30_000);
     });
 
+    it('decodes at the new size after a mode switch', async () => {
+      await using output = await FakeVideoOutput.start(MODE);
+      const keyframeRequests = { count: 0 };
+      await using pipeline = createPipeline(output, keyframeRequests);
+      pipeline.setActive(true);
+      await waitFor(() => keyframeRequests.count === 1, 'decoder started', 15_000);
+      await feed(pipeline, accessUnits.slice(0, 10));
+      await waitFor(() => output.frames >= 8, 'frames at the first size', 30_000);
+
+      pipeline.setMode({ width: 640, height: 360, fpsNum: 30, fpsDen: 1 });
+      await waitFor(() => keyframeRequests.count >= 2, 'decoder restarted for the new size', 15_000);
+      assert.deepEqual(output.ingestMode, { width: 640, height: 360 });
+      // Resume at the second IDR, as the phone does after a keyframe request.
+      await feed(pipeline, accessUnits.slice(30), 10);
+      // Like the first stage (8 of 10): allow for frames still inside ffmpeg when the input stops.
+      await waitFor(() => output.frames >= accessUnits.length - 32, 'frames at the new size', 30_000);
+      assert.equal(output.writerConnections, 2);
+    });
+
     it('stops the decoder when demand ends', async () => {
       await using output = await FakeVideoOutput.start(MODE);
       const keyframeRequests = { count: 0 };
@@ -95,3 +115,16 @@ describe(
     });
   },
 );
+
+describe('FfmpegDecoderFactory', () => {
+  it('decodes in software for the rest of the run once a hardware decoder failed', async () => {
+    await using output = await FakeVideoOutput.start(MODE);
+    const factory = new FfmpegDecoderFactory({
+      ffmpegPath: 'mobile-webcam-bridge-missing-ffmpeg.exe',
+      hwaccel: 'd3d11va',
+      logger: silentLogger,
+    });
+    await using _decoder = await factory.create(output, MODE, AbortSignal.timeout(5000));
+    await waitFor(() => factory.softwareOnly, 'software decoding after the hardware decoder failed');
+  });
+});

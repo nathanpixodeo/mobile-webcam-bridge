@@ -67,8 +67,14 @@ node src/main.ts status
 node src/main.ts doctor
 ```
 
-Options: `--camera mf|dshow|none`, `--no-mic`, `--width 1920 --height 1080 --fps 30`.
+Options: `--camera mf|dshow|none`, `--no-mic`, `--width 1920 --height 1080 --fps 30` (the default
+mode, offered first), `--max-width 3840 --max-height 2160 --max-fps 60` (the cap).
 `uninstall` removes everything (`--camera` / `--mic` to remove one part).
+
+The camera offers every catalog mode within the cap — 640×360, 640×480, 960×540, 1280×720,
+1920×1080 and 2560×1440 at 15/30/60 fps, 3840×2160 at 15/30 fps — and each application picks one
+(OBS: *Resolution/FPS Type → Custom*; Teams and Zoom choose on their own). The phone streams the
+largest mode in use. On a slower PC, lower the cap, e.g. `--max-width 1920 --max-height 1080`.
 
 `install` places the files in `%ProgramFiles%\MobileWebcamBridge\<version>` and registers them
 under `HKLM\SOFTWARE\MobileWebcamBridge`.
@@ -140,3 +146,14 @@ link:
 | `adb.path` | unset | `adb.exe` used to start the server (else `PATH`, then `%LOCALAPPDATA%\Android\Sdk\platform-tools`) |
 | `adb.startServer` | `true` | Run `adb start-server` when the server is not running |
 | `adb.includeNetworkDevices` | `false` | Also use phones connected by wireless debugging |
+
+The video keys:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `video.bitsPerPixel` | `0.1` | Bitrate = width × height × fps × this (1.5–40 Mbps; ~6 Mbps at 1080p30) |
+| `video.bitrateKbps` | unset | Fixed bitrate for every mode instead |
+| `video.hwaccel` | `auto` | ffmpeg decoder: `auto` uses `d3d11va` above 1080p, `none`, `d3d11va`, `dxva2` |
+| `video.modeDowngradeGraceMs` | `3000` | How long a smaller mode must be all that is in use before the phone switches down |
+| `camera.width`, `camera.height`, `camera.fps` | `1920`, `1080`, `30` | Default mode for `install` |
+| `camera.maxWidth`, `camera.maxHeight`, `camera.maxFps` | `3840`, `2160`, `60` | Cap for `install` |

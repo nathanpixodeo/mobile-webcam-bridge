@@ -47,12 +47,14 @@ export class BridgeNativeCli implements NativeHelper {
             backend: output.camera.backend,
             friendlyName: output.camera.friendlyName,
             pipeName: output.camera.pipeName,
-            mode: {
+            defaultMode: {
               width: output.camera.width,
               height: output.camera.height,
               fpsNum: output.camera.fpsNum,
               fpsDen: output.camera.fpsDen,
             },
+            cap: { maxWidth: output.camera.maxWidth, maxHeight: output.camera.maxHeight, maxFps: output.camera.maxFps },
+            modes: output.camera.modes,
           }
         : { installed: false },
       mic: output.mic,
@@ -71,6 +73,12 @@ export class BridgeNativeCli implements NativeHelper {
       String(options.mode.height),
       '--fps',
       String(options.mode.fps),
+      '--max-width',
+      String(options.cap.maxWidth),
+      '--max-height',
+      String(options.cap.maxHeight),
+      '--max-fps',
+      String(options.cap.maxFps),
       '--name',
       options.friendlyName,
     ];

@@ -36,7 +36,7 @@ export const StartVideoSchema = z.object({
   width: integer.min(160).max(3840),
   height: integer.min(120).max(2160),
   fps: integer.min(15).max(60),
-  bitrateKbps: integer.min(500).max(20_000),
+  bitrateKbps: integer.min(500).max(40_000),
   camera: CameraIdSchema,
   mirror: z.boolean(),
   orientation: OrientationSchema,

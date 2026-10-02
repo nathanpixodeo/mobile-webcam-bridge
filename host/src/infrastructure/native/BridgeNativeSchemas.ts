@@ -1,7 +1,17 @@
 /** zod schemas for bridge-native.exe output (protocol/BRIDGE_NATIVE.md). */
 import * as z from 'zod';
+import { isCatalogMode } from '#domain/video/ModeCatalog.ts';
 
 const int = z.int();
+
+const ModeSchema = z.object({
+  width: int.positive(),
+  height: int.positive(),
+  fpsNum: int.positive(),
+  fpsDen: int.positive(),
+});
+
+const CapSchema = z.object({ maxWidth: int.positive(), maxHeight: int.positive(), maxFps: int.positive() });
 
 export const NativeFailureSchema = z.object({
   ok: z.literal(false),
@@ -20,10 +30,9 @@ export const StatusSchema = z.object({
       installed: z.literal(true),
       backend: z.enum(['mf', 'dshow', 'none']),
       friendlyName: z.string(),
-      width: int.positive(),
-      height: int.positive(),
-      fpsNum: int.positive(),
-      fpsDen: int.positive(),
+      ...ModeSchema.shape,
+      ...CapSchema.shape,
+      modes: z.array(ModeSchema),
       pipeName: z.string(),
     }),
   ]),
@@ -58,12 +67,18 @@ export const HubEventSchema = z.discriminatedUnion('event', [
     event: z.literal('ready'),
     ingestPipe: z.string(),
     publicPipe: z.string(),
-    width: int,
-    height: int,
-    fpsNum: int,
-    fpsDen: int,
+    ...ModeSchema.shape,
+    ...CapSchema.shape,
   }),
-  z.object({ event: z.literal('consumers'), count: int.nonnegative() }),
+  z
+    .object({
+      event: z.literal('consumers'),
+      count: int.nonnegative(),
+      // The mode arbiter relies on consumers only ever subscribing to catalog modes.
+      modes: z.array(ModeSchema.refine(isCatalogMode, 'not a catalog mode')),
+    })
+    .refine((event) => event.modes.length === event.count, { message: 'one mode per consumer', path: ['modes'] }),
+  z.object({ event: z.literal('ingestMode'), width: int.positive(), height: int.positive() }),
   z.object({ event: z.literal('ingest'), connected: z.boolean() }),
   z.object({
     event: z.literal('stats'),

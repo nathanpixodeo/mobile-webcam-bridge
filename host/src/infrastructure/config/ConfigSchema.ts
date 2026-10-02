@@ -68,13 +68,18 @@ export const ConfigSchema = z
       .prefault({}),
     video: z
       .object({
-        bitrateKbps: int.min(500).max(20_000).default(6000),
+        /** Fixed H.264 bitrate for every mode; derived from the streamed mode with `bitsPerPixel` when omitted. */
+        bitrateKbps: int.min(500).max(40_000).optional(),
+        bitsPerPixel: z.number().positive().max(1).default(0.1),
         camera: CameraIdSchema.default('back.wide'),
         mirror: z.boolean().default(false),
         orientation: OrientationSchema.default('auto'),
         encoder: EncoderModeSchema.default('lowLatency'),
-        hwaccel: z.enum(['none', 'd3d11va', 'dxva2']).default('none'),
+        /** `auto`: software decoding up to 1080p, D3D11VA above. */
+        hwaccel: z.enum(['auto', 'none', 'd3d11va', 'dxva2']).default('auto'),
         stopGraceMs: int.nonnegative().default(3000),
+        /** How long the phone keeps a larger mode after the apps that needed it closed the camera. */
+        modeDowngradeGraceMs: int.nonnegative().default(3000),
         keyframeRequestIntervalMs: int.positive().default(500),
         maxDecoderRestartsPerMinute: int.positive().default(3),
       })
@@ -102,10 +107,16 @@ export const ConfigSchema = z
       .prefault({}),
     camera: z
       .object({
-        /** Mode used by `install` (the installed mode in HKLM is the runtime source of truth). */
-        width: int.default(1280),
-        height: int.default(720),
+        /**
+         * Default mode and cap used by `install` (the values installed in HKLM are the runtime source
+         * of truth). The camera advertises every catalog mode within the cap.
+         */
+        width: int.default(1920),
+        height: int.default(1080),
         fps: int.default(30),
+        maxWidth: int.default(3840),
+        maxHeight: int.default(2160),
+        maxFps: int.default(60),
         friendlyName: z.string().min(1).max(64).default('Mobile Webcam'),
         backend: z.enum(['auto', 'mf', 'dshow', 'none']).default('auto'),
       })

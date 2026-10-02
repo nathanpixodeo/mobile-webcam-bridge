@@ -4,8 +4,9 @@
 
 .DESCRIPTION
   Renders 1920x1080 PNGs into host/assets/placeholders with ffmpeg's drawtext filter and the
-  Segoe UI fonts that ship with Windows. The host converts them to NV12 at runtime for the
-  installed camera mode. Run this only when the wording or design changes.
+  Segoe UI fonts that ship with Windows. The host converts them to 1920x1080 NV12 frames at
+  runtime and the video hub scales those to each camera mode. Run this only when the wording or
+  design changes.
 #>
 [CmdletBinding()]
 param(

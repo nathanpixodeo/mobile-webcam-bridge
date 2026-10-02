@@ -10,12 +10,13 @@
     "startServer": true
   },
   "video": {
-    "bitrateKbps": 6000,
+    "bitsPerPixel": 0.1,
     "camera": "back.wide",
     "mirror": false,
     "orientation": "auto",
     "encoder": "lowLatency",
-    "hwaccel": "none"
+    "hwaccel": "auto",
+    "modeDowngradeGraceMs": 3000
   },
   "audio": {
     "enabled": true,
@@ -23,9 +24,12 @@
     "targetBufferMs": 40
   },
   "camera": {
-    "width": 1280,
-    "height": 720,
+    "width": 1920,
+    "height": 1080,
     "fps": 30,
+    "maxWidth": 3840,
+    "maxHeight": 2160,
+    "maxFps": 60,
     "friendlyName": "Mobile Webcam",
     "backend": "auto"
   },

@@ -1,3 +1,4 @@
+import type { ModeCap } from '#domain/video/ModeCatalog.ts';
 import type { VideoMode } from '#domain/video/VideoMode.ts';
 
 export type CameraBackend = 'mf' | 'dshow';
@@ -8,7 +9,10 @@ export type CameraStatus =
       readonly installed: true;
       readonly backend: CameraBackend | 'none';
       readonly friendlyName: string;
-      readonly mode: VideoMode;
+      readonly defaultMode: VideoMode;
+      readonly cap: ModeCap;
+      /** Every advertised mode, in advertising order (protocol/FRAME_PIPE.md §1). */
+      readonly modes: readonly VideoMode[];
       readonly pipeName: string;
     };
 
@@ -27,7 +31,9 @@ export interface NativeStatus {
 export interface InstallOptions {
   readonly camera: 'auto' | CameraBackend | 'none';
   readonly mic: boolean;
+  /** Default mode: a catalog mode within `cap`. */
   readonly mode: Pick<VideoMode, 'width' | 'height'> & { readonly fps: number };
+  readonly cap: ModeCap;
   readonly friendlyName: string;
 }
 

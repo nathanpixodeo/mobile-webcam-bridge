@@ -1,10 +1,11 @@
 import { createServer, type Server, type Socket } from 'node:net';
 import { describeAccessUnit } from '#domain/h264/AnnexB.ts';
-import { encodeJsonPayload } from '#domain/protocol/messages.ts';
+import { encodeJsonPayload, parseJsonPayload, StartVideoSchema, type StartVideo } from '#domain/protocol/messages.ts';
 import { decodePong, encodePacket, encodePong, type Packet } from '#domain/protocol/PacketCodec.ts';
 import { PacketReader } from '#domain/protocol/PacketReader.ts';
 import { AudioFlag, PacketType, VideoFlag } from '#domain/protocol/PacketType.ts';
 import type { JsonValue } from '#domain/protocol/CanonicalJson.ts';
+import { sameParams } from '#domain/session/StreamReconciler.ts';
 
 export interface FakeCompanionOptions {
   readonly accessUnits: readonly Buffer[];
@@ -18,7 +19,9 @@ export interface FakeCompanionOptions {
 /**
  * Device side of the wire protocol over plain TCP, standing in for the iOS app in tests. Loops
  * the given access units at `fps` while video is requested and emits a 1 kHz tone while audio is
- * requested. A keyframe request restarts the loop at its first access unit (an IDR).
+ * requested. A keyframe request restarts the loop at its first access unit (an IDR). A StartVideo
+ * with new parameters reconfigures like the real app: a new VideoConfig reporting the requested
+ * size, then the loop from its IDR (the access units themselves keep the fixture's size).
  */
 export class FakeCompanion implements AsyncDisposable {
   readonly #options: FakeCompanionOptions;
@@ -28,6 +31,8 @@ export class FakeCompanion implements AsyncDisposable {
   #connections = 0;
   #silent = false;
   #seq = new Map<number, number>();
+  #video: StartVideo | undefined;
+  #configId = 0;
   #videoTimer: NodeJS.Timeout | undefined;
   #audioTimer: NodeJS.Timeout | undefined;
   #pingTimer: NodeJS.Timeout | undefined;
@@ -67,6 +72,11 @@ export class FakeCompanion implements AsyncDisposable {
 
   get videoRunning(): boolean {
     return this.#videoTimer !== undefined;
+  }
+
+  /** Parameters of the running video stream. */
+  get video(): StartVideo | undefined {
+    return this.#video;
   }
 
   get audioRunning(): boolean {
@@ -142,7 +152,7 @@ export class FakeCompanion implements AsyncDisposable {
         decodePong(packet.payload);
         break;
       case PacketType.StartVideo:
-        this.#startVideo();
+        this.#startVideo(parseJsonPayload(StartVideoSchema, packet.payload, 'StartVideo'));
         break;
       case PacketType.StopVideo:
         this.#stopVideo();
@@ -161,25 +171,27 @@ export class FakeCompanion implements AsyncDisposable {
     }
   }
 
-  #startVideo(): void {
-    if (this.#videoTimer !== undefined) return;
+  #startVideo(params: StartVideo): void {
+    if (this.#video !== undefined && sameParams(params, this.#video)) return;
+    this.#video = params;
     this.#send(
       PacketType.VideoConfig,
       encodeJsonPayload({
-        configId: 1,
+        configId: ++this.#configId,
         codec: 'h264',
         profile: 'high',
-        width: 320,
-        height: 240,
-        fps: this.#options.fps,
-        bitrateKbps: 1000,
+        width: params.width,
+        height: params.height,
+        fps: params.fps,
+        bitrateKbps: params.bitrateKbps,
         rotationDeg: 0,
-        mirrored: false,
-        encoder: 'lowLatency',
-        camera: 'back.wide',
+        mirrored: params.mirror,
+        encoder: params.encoder,
+        camera: params.camera,
       }),
     );
     this.#auIndex = 0;
+    if (this.#videoTimer !== undefined) return;
     this.#videoTimer = setInterval(() => {
       const accessUnit = this.#options.accessUnits[this.#auIndex];
       if (accessUnit === undefined) return;
@@ -211,6 +223,7 @@ export class FakeCompanion implements AsyncDisposable {
   #stopVideo(): void {
     if (this.#videoTimer !== undefined) clearInterval(this.#videoTimer);
     this.#videoTimer = undefined;
+    this.#video = undefined;
   }
 
   #stopAudio(): void {

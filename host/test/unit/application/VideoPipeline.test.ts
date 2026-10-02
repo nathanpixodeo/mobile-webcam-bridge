@@ -4,8 +4,15 @@ import { VideoPipeline } from '#application/VideoPipeline.ts';
 import { MediaError } from '#domain/errors.ts';
 import { Emitter } from '#domain/events.ts';
 import { selectPlaceholder } from '#domain/video/PlaceholderPolicy.ts';
-import { silentLogger } from '#ports/Logger.ts';
-import type { EncodedAccessUnit, VideoDecoder, VideoDecoderEvents, VideoDecoderFactory } from '#ports/Video.ts';
+import type { VideoMode, VideoSize } from '#domain/video/VideoMode.ts';
+import { silentLogger, type Logger } from '#ports/Logger.ts';
+import type {
+  EncodedAccessUnit,
+  VideoDecoder,
+  VideoDecoderEvents,
+  VideoDecoderFactory,
+  VideoOutput,
+} from '#ports/Video.ts';
 import { InMemoryMetrics } from '#infrastructure/metrics/InMemoryMetrics.ts';
 import { FakeClock, flushMicrotasks } from '#test/fakes/FakeClock.ts';
 import { FakeVideoOutput } from '#test/fakes/FakeMedia.ts';
@@ -13,8 +20,16 @@ import { FakeVideoOutput } from '#test/fakes/FakeMedia.ts';
 class ScriptedDecoder implements VideoDecoder {
   readonly events = new Emitter<VideoDecoderEvents>();
   readonly decoded: EncodedAccessUnit[] = [];
+  readonly mode: VideoMode;
+  /** The hub's ingest size when the decoder was created. */
+  readonly ingestMode: VideoSize;
   accept = true;
   disposed = false;
+
+  constructor(mode: VideoMode, ingestMode: VideoSize) {
+    this.mode = mode;
+    this.ingestMode = ingestMode;
+  }
 
   decode(accessUnit: EncodedAccessUnit): boolean {
     if (!this.accept) return false;
@@ -35,13 +50,17 @@ class ScriptedDecoder implements VideoDecoder {
 class ScriptedFactory implements VideoDecoderFactory {
   readonly created: ScriptedDecoder[] = [];
 
-  async create(): Promise<VideoDecoder> {
+  async create(output: VideoOutput, mode: VideoMode): Promise<VideoDecoder> {
     await Promise.resolve();
-    const decoder = new ScriptedDecoder();
+    const decoder = new ScriptedDecoder(mode, output.ingestMode);
     this.created.push(decoder);
     return decoder;
   }
 }
+
+const DEFAULT_MODE: VideoMode = { width: 640, height: 360, fpsNum: 30, fpsDen: 1 };
+const HD: VideoMode = { width: 1280, height: 720, fpsNum: 30, fpsDen: 1 };
+const FULL_HD: VideoMode = { width: 1920, height: 1080, fpsNum: 30, fpsDen: 1 };
 
 const unit = (isIdr: boolean): EncodedAccessUnit => ({
   data: Buffer.from([isIdr ? 5 : 1]),
@@ -50,7 +69,7 @@ const unit = (isIdr: boolean): EncodedAccessUnit => ({
   timestampUs: 0n,
 });
 
-async function setup(): Promise<{
+async function setup(logger: Logger = silentLogger): Promise<{
   pipeline: VideoPipeline;
   factory: ScriptedFactory;
   clock: FakeClock;
@@ -62,12 +81,13 @@ async function setup(): Promise<{
   const clock = new FakeClock();
   const keyframes = { count: 0 };
   const metrics = new InMemoryMetrics();
-  const output = await FakeVideoOutput.start({ width: 320, height: 240, fpsNum: 30, fpsDen: 1 });
+  const output = await FakeVideoOutput.start(DEFAULT_MODE);
   const pipeline = new VideoPipeline({
     output,
     decoders: factory,
+    initialMode: DEFAULT_MODE,
     clock,
-    logger: silentLogger,
+    logger,
     metrics,
     requestKeyframe: () => {
       keyframes.count++;
@@ -133,6 +153,120 @@ describe('VideoPipeline', () => {
     assert.equal(pipeline.isActive, false);
     assert.ok(factory.created.every((decoder) => decoder.disposed));
     await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('restarts the decoder for a new size after the hub switched its ingest size', async () => {
+    const { pipeline, factory, keyframes, output } = await setup();
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    pipeline.onAccessUnit(unit(true), 0);
+    assert.deepEqual(output.ingestRequests, [], 'the default mode is already the ingest size');
+    assert.equal(factory.created[0]?.mode, DEFAULT_MODE);
+
+    pipeline.setMode(HD);
+    await flushMicrotasks();
+    assert.equal(factory.created[0].disposed, true);
+    assert.deepEqual(output.ingestRequests, [{ width: 1280, height: 720 }]);
+    assert.equal(factory.created.length, 2);
+    const decoder = factory.created[1]!;
+    assert.equal(decoder.mode, HD);
+    assert.deepEqual(decoder.ingestMode, { width: 1280, height: 720 }, 'decoder starts after the ack');
+    assert.equal(keyframes.count, 2, 'a keyframe is requested for the new decoder');
+    pipeline.onAccessUnit(unit(false), 1);
+    pipeline.onAccessUnit(unit(true), 2);
+    assert.deepEqual(
+      decoder.decoded.map((au) => au.isIdr),
+      [true],
+      'the new decoder starts at an IDR',
+    );
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('keeps the decoder when only the frame rate changes', async () => {
+    const { pipeline, factory, output } = await setup();
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    pipeline.setMode({ ...DEFAULT_MODE, fpsNum: 60 });
+    await flushMicrotasks();
+    assert.equal(factory.created.length, 1);
+    assert.equal(factory.created[0]?.disposed, false);
+    assert.deepEqual(output.ingestRequests, []);
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('remembers the mode while idle and switches the ingest size before the first decoder', async () => {
+    const { pipeline, factory, output } = await setup();
+    await using _output = output;
+    pipeline.setMode(HD);
+    await flushMicrotasks();
+    assert.deepEqual(output.ingestRequests, [], 'nothing happens without demand');
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    assert.deepEqual(output.ingestRequests, [{ width: 1280, height: 720 }]);
+    assert.equal(factory.created.length, 1);
+    const decoder = factory.created[0]!;
+    assert.equal(decoder.mode, HD);
+    assert.deepEqual(decoder.ingestMode, { width: 1280, height: 720 });
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('switches once to the latest mode when modes change in a burst', async () => {
+    const { pipeline, factory, output } = await setup();
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    pipeline.setMode(HD);
+    pipeline.setMode(FULL_HD);
+    await flushMicrotasks();
+    assert.deepEqual(output.ingestRequests, [{ width: 1920, height: 1080 }]);
+    assert.deepEqual(
+      factory.created.map((decoder) => decoder.mode),
+      [DEFAULT_MODE, FULL_HD],
+    );
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('follows a mode change that arrives while the hub is switching (latest wins)', async () => {
+    const { pipeline, factory, output } = await setup();
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    output.holdIngest = true;
+    pipeline.setMode(HD);
+    await flushMicrotasks();
+    assert.deepEqual(output.ingestRequests, [{ width: 1280, height: 720 }]);
+    pipeline.setMode(FULL_HD);
+    output.acknowledgeIngest();
+    await flushMicrotasks();
+    assert.deepEqual(output.ingestRequests, [
+      { width: 1280, height: 720 },
+      { width: 1920, height: 1080 },
+    ]);
+    assert.equal(factory.created.length, 1, 'no decoder for the superseded mode');
+    output.acknowledgeIngest();
+    await flushMicrotasks();
+    assert.deepEqual(
+      factory.created.map((decoder) => decoder.mode),
+      [DEFAULT_MODE, FULL_HD],
+    );
+    await pipeline[Symbol.asyncDispose]();
+  });
+
+  it('abandons a pending ingest switch quietly when disposed', async () => {
+    const errors: string[] = [];
+    const logger: Logger = { ...silentLogger, child: () => logger, error: (message) => errors.push(message) };
+    const { pipeline, factory, output } = await setup(logger);
+    await using _output = output;
+    pipeline.setActive(true);
+    await flushMicrotasks();
+    output.holdIngest = true;
+    pipeline.setMode(HD);
+    await flushMicrotasks();
+    await pipeline[Symbol.asyncDispose]();
+    assert.equal(factory.created.length, 1);
+    assert.deepEqual(errors, []);
   });
 
   it('forwards placeholder decisions to the output', async () => {

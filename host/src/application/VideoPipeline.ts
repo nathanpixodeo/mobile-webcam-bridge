@@ -2,6 +2,7 @@ import type { Clock } from '#domain/clock.ts';
 import { toError, type MediaError } from '#domain/errors.ts';
 import { KeyframeGate } from '#domain/h264/KeyframeGate.ts';
 import { selectPlaceholder, type PlaceholderInputs } from '#domain/video/PlaceholderPolicy.ts';
+import { describeMode, sameMode, sameSize, type VideoMode } from '#domain/video/VideoMode.ts';
 import type { Logger } from '#ports/Logger.ts';
 import type { Metrics } from '#ports/Metrics.ts';
 import type { EncodedAccessUnit, VideoDecoder, VideoDecoderFactory, VideoOutput } from '#ports/Video.ts';
@@ -9,6 +10,8 @@ import type { EncodedAccessUnit, VideoDecoder, VideoDecoderFactory, VideoOutput 
 export interface VideoPipelineOptions {
   readonly output: VideoOutput;
   readonly decoders: VideoDecoderFactory;
+  /** Mode to decode to until `setMode` is called (the installed default mode). */
+  readonly initialMode: VideoMode;
   readonly clock: Clock;
   readonly logger: Logger;
   readonly metrics: Metrics;
@@ -18,26 +21,33 @@ export interface VideoPipelineOptions {
   readonly maxDecoderRestartsPerMinute: number;
 }
 
+interface RunningDecoder {
+  readonly decoder: VideoDecoder;
+  readonly mode: VideoMode;
+  readonly subscription: Disposable;
+}
+
 /**
  * Access units → decoder → virtual camera. Owns the decoder lifecycle: started while the
- * camera has consumers, restarted (rate-limited) when it crashes, and gated so it only ever
- * starts decoding at an IDR.
+ * camera has consumers, restarted for every new streamed size, restarted (rate-limited) when it
+ * crashes, and gated so it only ever starts decoding at an IDR.
  */
 export class VideoPipeline implements AsyncDisposable {
   readonly #options: VideoPipelineOptions;
   readonly #gate = new KeyframeGate();
   readonly #abort = new AbortController();
   readonly #restartTimes: number[] = [];
-  #decoder: VideoDecoder | undefined;
-  #decoderSubscription: Disposable | undefined;
+  #running: RunningDecoder | undefined;
   #active = false;
+  #mode: VideoMode;
   #lastKeyframeRequestMs = Number.NEGATIVE_INFINITY;
   #lastSeq: number | undefined;
-  /** Serialises decoder start/stop so overlapping demand changes cannot race. */
+  /** Serialises decoder start/stop so overlapping demand and mode changes cannot race. */
   #lifecycle: Promise<void> = Promise.resolve();
 
   constructor(options: VideoPipelineOptions) {
     this.#options = options;
+    this.#mode = options.initialMode;
   }
 
   get isActive(): boolean {
@@ -48,7 +58,14 @@ export class VideoPipeline implements AsyncDisposable {
   setActive(active: boolean): void {
     if (active === this.#active) return;
     this.#active = active;
-    this.#enqueue(active ? () => this.#startDecoder() : () => this.#stopDecoder());
+    this.#enqueue(() => this.#reconcile());
+  }
+
+  /** Decodes to `mode`'s size from now on (driven by the streamed camera mode). */
+  setMode(mode: VideoMode): void {
+    if (sameMode(mode, this.#mode)) return;
+    this.#mode = mode;
+    this.#enqueue(() => this.#reconcile());
   }
 
   onAccessUnit(accessUnit: EncodedAccessUnit, seq: number): void {
@@ -60,7 +77,7 @@ export class VideoPipeline implements AsyncDisposable {
     }
     this.#lastSeq = seq;
 
-    const decoder = this.#decoder;
+    const decoder = this.#running?.decoder;
     if (decoder === undefined) return;
     if (!this.#gate.admit(accessUnit)) {
       metrics.increment('video.droppedAwaitingIdr');
@@ -87,41 +104,67 @@ export class VideoPipeline implements AsyncDisposable {
   async [Symbol.asyncDispose](): Promise<void> {
     this.#abort.abort();
     this.#active = false;
-    this.#enqueue(() => this.#stopDecoder());
+    this.#enqueue(() => this.#reconcile());
     await this.#lifecycle;
   }
 
   #enqueue(operation: () => Promise<void>): void {
     this.#lifecycle = this.#lifecycle.then(operation).catch((error: unknown) => {
+      if (error === this.#abort.signal.reason) return;
       this.#options.logger.error('Video pipeline operation failed', { error: toError(error).message });
     });
   }
 
-  async #startDecoder(): Promise<void> {
-    if (!this.#active || this.#decoder !== undefined || this.#abort.signal.aborted) return;
-    const decoder = await this.#options.decoders.create(this.#options.output, this.#abort.signal);
-    this.#decoder = decoder;
-    this.#decoderSubscription = decoder.events.on('failed', (error) => {
-      this.#onDecoderFailed(decoder, error);
-    });
+  /**
+   * Brings the decoder in line with the demand and the mode. It reads the state when it runs, so
+   * a burst of mode changes costs a single switch to the latest mode.
+   */
+  async #reconcile(): Promise<void> {
+    const { output, decoders, logger } = this.#options;
+    const signal = this.#abort.signal;
+    if (!this.#wantsDecoder()) {
+      await this.#stopDecoder();
+      return;
+    }
+    if (this.#running !== undefined && sameSize(this.#running.mode, this.#mode)) return;
+    await this.#stopDecoder();
+    // The hub must expect the new frame size before a decoder writes it; the mode may move again
+    // during the round trip, and only the latest one gets a decoder.
+    let mode = this.#mode;
+    while (this.#wantsDecoder() && !sameSize(output.ingestMode, mode)) {
+      await output.setIngestMode(mode, signal);
+      mode = this.#mode;
+    }
+    if (!this.#wantsDecoder()) return;
+    const decoder = await decoders.create(output, mode, signal);
+    this.#running = {
+      decoder,
+      mode,
+      subscription: decoder.events.on('failed', (error) => {
+        this.#onDecoderFailed(decoder, error);
+      }),
+    };
     this.#gate.markLoss();
     this.#lastKeyframeRequestMs = Number.NEGATIVE_INFINITY;
     this.#requestKeyframe();
-    this.#options.logger.info('Video decoding started');
+    logger.info('Video decoding started', { mode: describeMode(mode) });
+  }
+
+  #wantsDecoder(): boolean {
+    return this.#active && !this.#abort.signal.aborted;
   }
 
   async #stopDecoder(): Promise<void> {
-    const decoder = this.#decoder;
-    if (decoder === undefined) return;
-    this.#decoder = undefined;
-    this.#decoderSubscription?.[Symbol.dispose]();
-    this.#decoderSubscription = undefined;
-    await decoder[Symbol.asyncDispose]();
+    const running = this.#running;
+    if (running === undefined) return;
+    this.#running = undefined;
+    running.subscription[Symbol.dispose]();
+    await running.decoder[Symbol.asyncDispose]();
     this.#options.logger.info('Video decoding stopped');
   }
 
   #onDecoderFailed(decoder: VideoDecoder, error: MediaError): void {
-    if (decoder !== this.#decoder) return;
+    if (decoder !== this.#running?.decoder) return;
     const { clock, logger, maxDecoderRestartsPerMinute } = this.#options;
     this.#options.metrics.increment('video.decoderRestarts');
     const now = clock.nowMs();
@@ -134,7 +177,7 @@ export class VideoPipeline implements AsyncDisposable {
     }
     this.#restartTimes.push(now);
     logger.warn('Decoder failed, restarting', { error: error.message });
-    this.#enqueue(() => this.#startDecoder());
+    this.#enqueue(() => this.#reconcile());
   }
 
   #requestKeyframe(): void {

@@ -114,10 +114,23 @@ Node moves only compressed video (a few Mbit/s) and 96 KB/s of PCM.
 - The device sends `VideoConfig`, then an IDR with SPS/PPS, then access units.
 - `KeyframeGate` drops access units until an IDR after any loss (start, decoder congestion,
   reconnect), and the pipeline requests a keyframe (rate-limited to one per 500 ms).
+- The camera advertises a catalog of modes (640×360 to 3840×2160, 15/30/60 fps, 4K up to 30 fps;
+  protocol/FRAME_PIPE.md §1) and every application picks one. Each consumer subscribes to its
+  mode on the hub's pipe; the hub reports the consumers' modes to Node.
+- `ModeArbiter` streams the largest requested size at the highest requested frame rate: it
+  upgrades immediately and downgrades only after `video.modeDowngradeGraceMs` (3 s). A change
+  re-sends `StartVideo` to the phone, restarts ffmpeg for the new output size and switches the
+  hub's ingest size (`ingest` → `ingestMode`). Meanwhile the hub keeps serving every consumer by
+  scaling the previous frames, so a switch shows no black frames.
+- The bitrate follows the mode: `W × H × fps × video.bitsPerPixel` (0.1), clamped to
+  1.5–40 Mbps (about 6 Mbps at 1080p30, 25 Mbps at 4K30), unless `video.bitrateKbps` overrides it.
 - ffmpeg decodes with `-flags low_delay`, a tiny probe, `-fps_mode passthrough`, and scales/pads
-  into the fixed camera mode. After each access unit the host writes an access unit delimiter so
-  ffmpeg's parser emits the frame immediately (measured: ~47 ms decode latency at 30 fps instead
-  of ~94 ms). `-fflags nobuffer` must not be used: it drops frames with raw H.264.
+  into the streamed mode. Above 1080p it decodes with `d3d11va` (`video.hwaccel: auto`) and falls
+  back to software if that fails. After each access unit the host writes an access unit delimiter
+  so ffmpeg's parser emits the frame immediately (measured: ~47 ms decode latency at 30 fps
+  instead of ~94 ms). `-fflags nobuffer` must not be used: it drops frames with raw H.264.
+- The hub scales frames per consumer (2×2 box passes for large reductions, then bilinear) and
+  letterboxes when the aspect ratios differ (e.g. a 640×480 consumer of a 16:9 stream).
 - A crashed decoder restarts at most three times per minute.
 
 ### Audio path
@@ -169,8 +182,10 @@ with the camera and microphone types, so it continues with the screen off. See `
 
 - Decode latency is about one frame interval plus ~14 ms with ffmpeg; a Media Foundation decoder
   could remove the remaining frame of delay.
-- The camera advertises one mode (installed under `HKLM\SOFTWARE\MobileWebcamBridge`); changing it
-  requires reinstalling.
+- Frame Server shares one stream of the Media Foundation camera between all applications, so
+  on Windows 11 the first application's mode is what everybody gets; per-application modes
+  apply to DirectShow (Windows 10) consumers.
+- 3840×2160 is offered up to 30 fps; raw 4K60 would move ~750 MB/s through each consumer.
 - The iOS camera stops when the app is in the background (iOS restriction); the microphone keeps
   running with the screen locked.
 - The Android app streams from a foreground service, so camera and microphone keep running with

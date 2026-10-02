@@ -133,7 +133,7 @@ defaults to the whole catalog.
 - `ready`: `width`/`height`/`fpsNum`/`fpsDen` are the default mode, which is also the initial
   ingest size; `maxWidth`/`maxHeight`/`maxFps` are the cap.
 - `consumers` is emitted on every change of the set of subscribed consumers. `modes` holds one
-  entry per consumer (`modes.length == count`), in subscription order.
+  entry per consumer (`modes.length == count`), in connection order.
 - `ingestMode` acknowledges an `ingest` command once the new ingest size is in effect.
 - `stats` is emitted every 5 s.
 - A fatal error is followed by exit code 1.

@@ -42,7 +42,7 @@ export class StreamReconciler {
   }
 }
 
-function sameParams<T extends object>(a: T, b: T | null): boolean {
+export function sameParams<T extends object>(a: T, b: T | null): boolean {
   if (b === null) return false;
   const keys = Object.keys(a) as (keyof T)[];
   return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
